@@ -23,8 +23,21 @@
   .thumb.active { border-color: #d4a24a; }
   .thumb .badge { position: absolute; right: 2px; bottom: 2px; background: rgba(0,0,0,.65); color: #ffd98a; font-size: 9px; padding: 1px 4px; border-radius: 4px; display: none; }
   .thumb.edited .badge { display: block; }
-  #stage { display: flex; align-items: center; justify-content: center; padding: 12px; min-height: 200px; }
+  #stage { display: flex; align-items: center; justify-content: center; padding: 12px; min-height: 200px; overflow: hidden; }
+  #stageInner { position: relative; line-height: 0; touch-action: none; }
   #view { max-width: 100%; max-height: 52vh; border-radius: 6px; box-shadow: 0 6px 30px rgba(0,0,0,.5); touch-action: none; background: #18181b; }
+  #cropOverlay, #healOverlay { position: absolute; inset: 0; display: none; line-height: normal; }
+  .cropRect { position: absolute; border: 1.5px solid #ffd98a; box-shadow: 0 0 0 9999px rgba(0,0,0,.55); cursor: move; }
+  .cropRect .thirds { position: absolute; inset: 0; pointer-events: none; opacity: .55;
+    background:
+      linear-gradient(to right, transparent calc(33.33% - .5px), rgba(255,217,138,.6) 33.33%, transparent calc(33.33% + .5px)),
+      linear-gradient(to right, transparent calc(66.66% - .5px), rgba(255,217,138,.6) 66.66%, transparent calc(66.66% + .5px)),
+      linear-gradient(to bottom, transparent calc(33.33% - .5px), rgba(255,217,138,.6) 33.33%, transparent calc(33.33% + .5px)),
+      linear-gradient(to bottom, transparent calc(66.66% - .5px), rgba(255,217,138,.6) 66.66%, transparent calc(66.66% + .5px)); }
+  .cropHandle { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; cursor: pointer; z-index: 3; }
+  .cropHandle::after { content: ''; position: absolute; left: 5px; top: 5px; width: 12px; height: 12px; background: #ffd98a; border: 1.5px solid #17130a; border-radius: 3px; }
+  .healDot { position: absolute; border: 1.5px solid rgba(255,217,138,.95); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 0 1px rgba(0,0,0,.4) inset; }
+  .healDot.del { border-color: #ff9a9a; }
   #emptyMsg { color: #8b8b92; font-size: 13.5px; text-align: center; line-height: 1.9; padding: 30px 10px; }
   #tabs { display: flex; gap: 6px; overflow-x: auto; padding: 4px 12px 10px; scrollbar-width: none; position: sticky; top: 53px; background: #101012; z-index: 15; }
   #tabs::-webkit-scrollbar { display: none; }
@@ -73,7 +86,11 @@
 <div id="glwarn">⚠️ ဒီ browser မှာ WebGL မရလို့ ပုံ ပြင် မရပါ — Safari/Chrome နောက်ဆုံး version နဲ့ စမ်းကြည့်ပါ။</div>
 <div id="strip"></div>
 <div id="stage">
-  <canvas id="view" width="320" height="240" style="display:none"></canvas>
+  <div id="stageInner">
+    <canvas id="view" width="320" height="240" style="display:none"></canvas>
+    <div id="cropOverlay"></div>
+    <div id="healOverlay"></div>
+  </div>
   <div id="emptyMsg">ဓာတ်ပုံ ဖွင့်ပြီး စမ်းကြည့်ပါ<br><span style="font-size:12px">ပုံ အားလုံး ဖုန်း/ကွန်ပျူတာ ထဲမှာပဲ ပြင်တာပါ — server ပေါ် မတက်ဘူး</span></div>
 </div>
 <div id="tabs"></div>
@@ -97,6 +114,7 @@
 <input type="file" id="fileOpen" accept="image/*" multiple hidden>
 <input type="file" id="fileLUT" accept=".cube,.png" hidden>
 <input type="file" id="fileRecipe" accept=".json,application/json" hidden>
+<input type="file" id="fileXMP" accept=".xmp" multiple hidden>
 
 <script>
 'use strict';
@@ -124,6 +142,8 @@ function defaultSettings() {
     lutName: '', lutIntensity: 80,
     grain: 0, grainSize: 50, vignette: 0, sharpen: 0, leak: 0, dust: 0,
     distortion: 0, perspV: 0, perspH: 0, rotate: 0,
+    crop: { x: 0, y: 0, w: 1, h: 1 },
+    heals: [], healSize: 4,
     bokeh: 0, focusX: 0.5, focusY: 0.42
   };
 }
@@ -144,7 +164,23 @@ const FACTORY_PRESETS = [
       curves: { master: [[0, 0.09], [0.5, 0.52], [1, 0.94]] } } },
   { id: 'chrome', name: 'Chrome Pop', sub: 'စူး · အရောင် ထက်', patch: {
       contrast: 16, saturation: 12, vibrance: 14, highlights: -6, sharpen: 20, grain: 6 } },
-  { id: 'clean', name: 'Clean', sub: 'အသန့် — ပြင်ရုံ သက်သက်', patch: { sharpen: 12 } }
+  { id: 'clean', name: 'Clean', sub: 'အသန့် — ပြင်ရုံ သက်သက်', patch: { sharpen: 12 } },
+  { id: 'gold', name: 'Gold 200', sub: 'နွေးနွေး · ပျော့ပျော့', patch: {
+      temp: 7, saturation: -2, vibrance: 6, contrast: -2, fade: 10, grain: 24, highlights: -14, sharpen: 8,
+      curves: { master: [[0, 0.05], [0.25, 0.28], [0.5, 0.53], [0.75, 0.78], [1, 0.96]],
+                r: [[0, 0], [0.5, 0.54], [1, 1]], b: [[0, 0.02], [0.5, 0.45], [1, 0.95]] } } },
+  { id: 'fuji', name: 'Fuji Green', sub: 'စိမ်း · သန့်ရှင်း', patch: {
+      temp: -3, tint: -3, saturation: -8, vibrance: 10, contrast: 4, fade: 6, grain: 18, sharpen: 10,
+      curves: { master: [[0, 0.03], [0.5, 0.5], [1, 0.98]],
+                g: [[0, 0], [0.5, 0.53], [1, 1]], b: [[0, 0], [0.5, 0.52], [1, 1]] } } },
+  { id: 'cinema', name: 'Cinema', sub: 'teal & orange · ပျော့', patch: {
+      contrast: 8, fade: 14, saturation: -10, vibrance: 12, highlights: -12, shadows: 8, grain: 12, sharpen: 8,
+      curves: { master: [[0, 0.06], [0.25, 0.24], [0.5, 0.5], [0.75, 0.76], [1, 0.95]],
+                b: [[0, 0.04], [0.5, 0.5], [1, 0.96]], r: [[0, 0], [0.5, 0.52], [1, 1]] },
+      hsl: { orange: { h: 0, s: 6, l: 0 }, aqua: { h: 4, s: 8, l: 0 }, blue: { h: 0, s: 4, l: -4 } } } },
+  { id: 'matte', name: 'Soft Matte', sub: 'မှုန် · pastel', patch: {
+      contrast: -14, fade: 22, saturation: -14, vibrance: 6, temp: 3, grain: 14, vignette: 6,
+      curves: { master: [[0, 0.08], [0.25, 0.3], [0.5, 0.52], [0.75, 0.74], [1, 0.92]] } } }
 ];
 
 function applyPatch(settings, patch) {
@@ -258,6 +294,88 @@ function parseRecipe(text) {
   return { name: o.name || 'Recipe', settings: merged };
 }
 function settingsDirty(a, b) { return JSON.stringify(a) !== JSON.stringify(b); }
+
+// Crop output size in pixels for a crop rect (normalized, top-down origin)
+function cropOutSize(crop, imgW, imgH) {
+  const c = crop || { x: 0, y: 0, w: 1, h: 1 };
+  return { w: Math.max(1, Math.round(c.w * imgW)), h: Math.max(1, Math.round(c.h * imgH)) };
+}
+
+// Adjust a crop rect to a target pixel aspect (aw/ah), keeping its centre, clamped inside the image
+function fitCropAspect(crop, aw, ah, imgW, imgH) {
+  const c = { x: crop.x, y: crop.y, w: crop.w, h: crop.h };
+  const target = aw / ah;
+  let pw = c.w * imgW, ph = c.h * imgH;
+  if (pw / ph > target) pw = ph * target; else ph = pw / target;
+  const cx = (c.x + c.w / 2) * imgW, cy = (c.y + c.h / 2) * imgH;
+  let nx = (cx - pw / 2) / imgW, ny = (cy - ph / 2) / imgH;
+  c.w = pw / imgW; c.h = ph / imgH;
+  c.x = clamp(nx, 0, 1 - c.w);
+  c.y = clamp(ny, 0, 1 - c.h);
+  return c;
+}
+
+// Clamp a crop rect to sane bounds (min size, inside the image)
+function clampCrop(crop) {
+  const c = { x: crop.x, y: crop.y, w: crop.w, h: crop.h };
+  c.w = clamp(c.w, 0.05, 1); c.h = clamp(c.h, 0.05, 1);
+  c.x = clamp(c.x, 0, 1 - c.w); c.y = clamp(c.y, 0, 1 - c.h);
+  return c;
+}
+
+// Parse an Adobe Camera Raw / Lightroom .xmp preset into a FilmLab settings patch.
+// Parametric part only (sliders, tone curves, HSL) — the embedded RGBTable/Look data
+// inside commercial presets does not decode here; the Hald bake stays the full-fidelity route.
+function parseXMPSettings(text) {
+  function attr(name) {
+    let m = text.match(new RegExp('crs:' + name + '="([^"]*)"'));
+    if (m) return m[1];
+    m = text.match(new RegExp('<crs:' + name + '>([^<]*)</crs:' + name + '>'));
+    return m ? m[1] : null;
+  }
+  function num(name) { const v = attr(name); if (v === null) return null; const n = parseFloat(v); return Number.isFinite(n) ? n : null; }
+  function curvePoints(tag) {
+    const m = text.match(new RegExp('<crs:' + tag + '>([\\s\\S]*?)</crs:' + tag + '>'));
+    if (!m) return null;
+    const pts = [];
+    const re = /(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)/g;
+    let mm;
+    while ((mm = re.exec(m[1])) !== null) pts.push([clamp(parseFloat(mm[1]) / 255, 0, 1), clamp(parseFloat(mm[2]) / 255, 0, 1)]);
+    return pts.length >= 2 ? pts : null;
+  }
+  const patch = {};
+  const map1 = [
+    ['Exposure2012', 'exposure', -2, 2], ['Contrast2012', 'contrast', -100, 100],
+    ['Highlights2012', 'highlights', -100, 100], ['Shadows2012', 'shadows', -100, 100],
+    ['Whites2012', 'whites', -100, 100], ['Blacks2012', 'blacks', -100, 100],
+    ['Vibrance', 'vibrance', -100, 100], ['Saturation', 'saturation', -100, 100]
+  ];
+  for (const [src, dst, lo, hi] of map1) { const v = num(src); if (v !== null) patch[dst] = clamp(v, lo, hi); }
+  const sharp = num('Sharpness'); if (sharp !== null) patch.sharpen = clamp(Math.round(sharp / 2), 0, 100);
+  const grain = num('GrainAmount'); if (grain !== null) patch.grain = clamp(Math.round(grain), 0, 100);
+  const vig = num('PostCropVignetteAmount'); if (vig !== null) patch.vignette = clamp(Math.round(-vig), 0, 100);
+  const curves = {};
+  const cm = curvePoints('ToneCurvePV2012'); if (cm) curves.master = cm;
+  const cr = curvePoints('ToneCurvePV2012Red'); if (cr) curves.r = cr;
+  const cg = curvePoints('ToneCurvePV2012Green'); if (cg) curves.g = cg;
+  const cb = curvePoints('ToneCurvePV2012Blue'); if (cb) curves.b = cb;
+  if (Object.keys(curves).length) patch.curves = curves;
+  const hsl = {};
+  const chans = [['Red', 'red'], ['Orange', 'orange'], ['Yellow', 'yellow'], ['Green', 'green'], ['Blue', 'blue'], ['Purple', 'purple'], ['Magenta', 'magenta']];
+  for (const [xname, key] of chans) {
+    const h = num('HueAdjustment' + xname), s = num('SaturationAdjustment' + xname), l = num('LuminanceAdjustment' + xname);
+    if (h !== null || s !== null || l !== null) hsl[key] = { h: clamp(h || 0, -50, 50), s: clamp(s || 0, -100, 100), l: clamp(l || 0, -100, 100) };
+  }
+  for (const xname of ['Aquamarine', 'Aqua']) {
+    const h = num('HueAdjustment' + xname), s = num('SaturationAdjustment' + xname), l = num('LuminanceAdjustment' + xname);
+    if (h !== null || s !== null || l !== null) { hsl.aqua = { h: clamp(h || 0, -50, 50), s: clamp(s || 0, -100, 100), l: clamp(l || 0, -100, 100) }; break; }
+  }
+  if (Object.keys(hsl).length) patch.hsl = hsl;
+  let name = null;
+  const nm = text.match(/<crs:Name>[\s\S]*?<rdf:li[^>]*>([^<]+)<\/rdf:li>/);
+  if (nm) name = nm[1].trim();
+  return { name, patch, found: Object.keys(patch).length };
+}
 // === PURE END ===
 </script>
 <script>
@@ -275,6 +393,7 @@ const GRADE_FRAG = `
 precision highp float;
 varying vec2 vUv;
 uniform sampler2D uTex;
+uniform vec4 uCrop;
 uniform float uAspect, uDistort, uPerspV, uPerspH, uRotate, uZoom;
 uniform float uExposure, uBrightness, uContrast, uHighlights, uShadows, uWhites, uBlacks, uFade;
 uniform float uTemp, uTint, uVibrance, uSaturation;
@@ -283,7 +402,8 @@ uniform sampler2D uCurves;
 uniform sampler2D uLUT; uniform float uLutSize, uLutAmt, uHasLUT;
 float lum(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 vec2 geoUv(vec2 uv0){
-  vec2 uv = uv0 - 0.5;
+  vec2 cuv = vec2(uCrop.x + uv0.x * uCrop.z, (1.0 - uCrop.y - uCrop.w) + uv0.y * uCrop.w);
+  vec2 uv = cuv - 0.5;
   uv.x /= (1.0 + uPerspV * uv.y * 1.6);
   uv.y /= (1.0 + uPerspH * uv.x * 1.6);
   vec2 rp = vec2(uv.x * uAspect, uv.y);
@@ -404,9 +524,24 @@ precision highp float;
 varying vec2 vUv;
 uniform sampler2D uTex; uniform vec2 uTexel; uniform vec2 uRes;
 uniform float uSharpen, uGrain, uGrainSize, uVignette, uLeak, uDust, uSeed, uAspect;
+uniform vec4 uHealPos[12];
+uniform vec2 uHealOff[12];
+uniform float uHealCount;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 void main(){
   vec3 c = texture2D(uTex, vUv).rgb;
+  if (uHealCount > 0.0) {
+    for (int i = 0; i < 12; i++) {
+      if (float(i) >= uHealCount) break;
+      vec4 hp = uHealPos[i];
+      vec2 d = (vUv - hp.xy) * vec2(uAspect, 1.0);
+      float wgt = smoothstep(hp.z, hp.z * 0.45, length(d));
+      if (wgt > 0.001) {
+        vec3 src = texture2D(uTex, clamp(vUv + uHealOff[i], 0.002, 0.998)).rgb;
+        c = mix(c, src, wgt * 0.94);
+      }
+    }
+  }
   if (uSharpen > 0.001) {
     vec3 nb = texture2D(uTex, vUv + vec2(uTexel.x, 0.0)).rgb + texture2D(uTex, vUv - vec2(uTexel.x, 0.0)).rgb
             + texture2D(uTex, vUv + vec2(0.0, uTexel.y)).rgb + texture2D(uTex, vUv - vec2(0.0, uTexel.y)).rgb;
@@ -446,6 +581,7 @@ let S = defaultSettings();
 let imgTex = null, imgW = 0, imgH = 0;
 let curvesTex = null, lutTex = null, lutSizeN = 0, maskTex = null;
 let useRadialMask = true;
+let cropEditActive = false;
 const progs = {};
 const fbos = {};
 let quadBuf = null;
@@ -595,6 +731,8 @@ function fillZoomFor(rotDeg, aspect) {
 function setGradeUniforms(P, st, w, h) {
   const aspect = w / h;
   gl.uniform1i(U(P, 'uTex'), 0);
+  const cr = cropEditActive ? { x: 0, y: 0, w: 1, h: 1 } : (st.crop || { x: 0, y: 0, w: 1, h: 1 });
+  gl.uniform4f(U(P, 'uCrop'), cr.x, cr.y, cr.w, cr.h);
   gl.uniform1f(U(P, 'uAspect'), aspect);
   gl.uniform1f(U(P, 'uDistort'), st.distortion * 0.006);
   gl.uniform1f(U(P, 'uPerspV'), st.perspV * 0.01);
@@ -683,6 +821,17 @@ function renderPipeline(st, w, h, toCanvas) {
   gl.uniform1f(U(progs.finish, 'uDust'), st.dust / 100);
   gl.uniform1f(U(progs.finish, 'uSeed'), Math.random() * 10);
   gl.uniform1f(U(progs.finish, 'uAspect'), w / h);
+  // heal spots: stored in original-image coords (top-down); convert to display coords via the crop
+  const hcr = cropEditActive ? { x: 0, y: 0, w: 1, h: 1 } : (st.crop || { x: 0, y: 0, w: 1, h: 1 });
+  const heals = (st.heals || []).slice(0, 12);
+  heals.forEach((hh, i) => {
+    const du = (hh.x - hcr.x) / hcr.w;
+    const dvTop = (hh.y - hcr.y) / hcr.h;
+    const radAspect = (hh.r / hcr.w) * (w / h);
+    gl.uniform4f(U(progs.finish, 'uHealPos[' + i + ']'), du, 1 - dvTop, radAspect, 0);
+    gl.uniform2f(U(progs.finish, 'uHealOff[' + i + ']'), (hh.dx || 0) / hcr.w, -((hh.dy || 0) / hcr.h));
+  });
+  gl.uniform1f(U(progs.finish, 'uHealCount'), heals.length);
   drawQuad(progs.finish);
 }
 </script>
@@ -712,12 +861,39 @@ function scheduleRender() {
 function renderPreview() {
   const ph = activePhoto();
   if (!ph || !gl) return;
+  const out = cropEditActive ? { w: imgW, h: imgH } : cropOutSize(S.crop, imgW, imgH);
   const maxDim = 1280;
-  const scale = Math.min(1, maxDim / Math.max(imgW, imgH));
-  const w = Math.max(2, Math.round(imgW * scale)), h = Math.max(2, Math.round(imgH * scale));
+  const scale = Math.min(1, maxDim / Math.max(out.w, out.h));
+  const w = Math.max(2, Math.round(out.w * scale)), h = Math.max(2, Math.round(out.h * scale));
   if (viewCanvas.width !== w) viewCanvas.width = w;
   if (viewCanvas.height !== h) viewCanvas.height = h;
   renderPipeline(S, w, h, true);
+  refreshHealMarkers();
+}
+
+/* ---------- preview zoom / pan (view only — export is unaffected) ---------- */
+const viewT = { z: 1, tx: 0, ty: 0 };
+function applyViewTransform() {
+  const el = $('stageInner');
+  if (el) el.style.transform = 'translate(' + viewT.tx + 'px,' + viewT.ty + 'px) scale(' + viewT.z + ')';
+}
+function resetViewZoom() { viewT.z = 1; viewT.tx = 0; viewT.ty = 0; applyViewTransform(); }
+function setViewZoom(z, cx, cy) {
+  const el = $('stageInner');
+  const r = el.getBoundingClientRect();
+  const mx = cx !== undefined ? cx : r.left + r.width / 2;
+  const my = cy !== undefined ? cy : r.top + r.height / 2;
+  const nz = clamp(z, 1, 5);
+  if (nz === viewT.z) return;
+  // transform is translate(t) scale(z) about the element centre; rect centre = layout centre + t
+  const ox = r.left + r.width / 2 - viewT.tx;
+  const oy = r.top + r.height / 2 - viewT.ty;
+  const k = nz / viewT.z;
+  viewT.tx = (mx - ox) * (1 - k) + viewT.tx * k;
+  viewT.ty = (my - oy) * (1 - k) + viewT.ty * k;
+  viewT.z = nz;
+  if (viewT.z <= 1.001) { viewT.z = 1; viewT.tx = 0; viewT.ty = 0; }
+  applyViewTransform();
 }
 
 /* ---------- generic slider row ---------- */
@@ -741,8 +917,8 @@ const FEV = (v) => (v > 0 ? '+' : '') + v.toFixed(2);
 
 /* ---------- tabs ---------- */
 const TABS = [
-  ['preset', '🎞 Preset'], ['light', '💡 Light'], ['color', '🎨 Color'], ['curves', '〰 Curves'],
-  ['hsl', '🌈 HSL'], ['effects', '✨ Effects'], ['geometry', '📐 Geometry'], ['portrait', '👤 Portrait']
+  ['preset', '🎞 Preset'], ['crop', '✂ Crop'], ['light', '💡 Light'], ['color', '🎨 Color'], ['curves', '〰 Curves'],
+  ['hsl', '🌈 HSL'], ['effects', '✨ Effects'], ['geometry', '📐 Geometry'], ['heal', '🩹 Heal'], ['portrait', '👤 Portrait']
 ];
 function buildTabs() {
   const bar = $('tabs');
@@ -751,7 +927,12 @@ function buildTabs() {
     const b = document.createElement('button');
     b.className = 'tab' + (id === activeTab ? ' active' : '');
     b.textContent = label;
-    b.addEventListener('click', () => { activeTab = id; buildTabs(); buildPanel(); });
+    b.addEventListener('click', () => {
+      activeTab = id;
+      cropEditActive = (id === 'crop');
+      if (id === 'crop' || id === 'heal') resetViewZoom();
+      buildTabs(); buildPanel(); scheduleRender();
+    });
     bar.appendChild(b);
   }
 }
@@ -790,7 +971,10 @@ function buildPanel() {
   else if (activeTab === 'curves') panelCurves(panel);
   else if (activeTab === 'hsl') panelHSL(panel);
   else if (activeTab === 'geometry') panelGeometry(panel);
+  else if (activeTab === 'crop') panelCrop(panel);
+  else if (activeTab === 'heal') panelHeal(panel);
   else if (activeTab === 'portrait') panelPortrait(panel);
+  syncOverlays();
 }
 function note(parent, text) {
   const d = document.createElement('div');
@@ -811,6 +995,7 @@ function panelPreset(panel) {
       const keepLUT = { lutName: S.lutName, lutIntensity: S.lutIntensity };
       const fresh = applyPatch(defaultSettings(), pr.patch);
       fresh.lutName = keepLUT.lutName; fresh.lutIntensity = keepLUT.lutIntensity;
+      fresh.crop = deepClone(S.crop); fresh.heals = deepClone(S.heals); fresh.healSize = S.healSize;
       fresh._presetId = pr.id;
       replaceSettings(fresh);
       buildPanel();
@@ -835,9 +1020,15 @@ function panelPreset(panel) {
   bClear.addEventListener('click', () => { clearLUT(); S.lutName = ''; buildPanel(); scheduleRender(); });
   const bHald = document.createElement('button'); bHald.className = 'chip'; bHald.textContent = '⬇ Hald identity ထုတ်မယ်';
   bHald.addEventListener('click', downloadIdentityHald);
-  lb.append(bLoad, bClear, bHald);
+  const bXmp = document.createElement('button'); bXmp.className = 'chip'; bXmp.textContent = '📥 RNI .xmp သွင်းမယ်';
+  bXmp.addEventListener('click', () => $('fileXMP').click());
+  lb.append(bLoad, bClear, bHald, bXmp);
   panel.appendChild(lb);
-  note(panel, 'RNI preset သုံးချင်ရင် — (၁) Hald identity ပုံကို ထုတ်ယူ၊ (၂) Capture One / Lightroom မှာ အဲ့ပုံပေါ် RNI style တင်ပြီး PNG အဖြစ် export၊ (၃) ရလာတဲ့ ပုံကို ဒီမှာ LUT အဖြစ် ပြန် load လုပ်ရုံပဲ။ RNI package ထဲမှာ .cube ဖိုင် ပါရင်တော့ တိုက်ရိုက် load လို့ ရတယ်။');
+  const libBox = document.createElement('div');
+  libBox.id = 'lutLibrary';
+  panel.appendChild(libBox);
+  renderLUTLibrary();
+  note(panel, 'LUT တွေ import လုပ်ပြီးရင် ဒီ device ထဲမှာ သိမ်းထားပေးတယ် — app ပြန် ဖွင့်ရင် အလိုအလျောက် ပြန် တင်တယ်။ RNI အတွက် လမ်း ၂ ခု: (၁) .xmp သွင်းနည်း — slider/curve/HSL အပိုင်းကို recipe အဖြစ် ပြောင်းပေးတယ် (အနီးစပ်၊ embedded color table မပါ)၊ (၂) အပြည့်ဆုံး နည်း — Hald identity ကို Lightroom/Photoshop (ACR) မှာ RNI preset တင်ပြီး PNG export၊ အဲ့ပုံကို LUT အဖြစ် ပြန် load။ .dcp ဖိုင်တွေက RAW camera profile တွေမို့ ဒီ app မှာ မလိုပါ။');
 }
 function replaceSettings(fresh) {
   const ph = activePhoto();
@@ -852,6 +1043,380 @@ function markEdited() {
   if (ph) ph.edited = settingsDirty(ph.settings, defaultSettings());
   renderStrip();
 }
+</script>
+<script>
+'use strict';
+/* ================= LUT library (IndexedDB persistence) ================= */
+let lutLibrary = []; // [{ name, kind }]
+function openLUTDB() {
+  return new Promise((res) => {
+    if (!('indexedDB' in window)) return res(null);
+    let rq;
+    try { rq = indexedDB.open('filmlab', 1); } catch (e) { return res(null); }
+    rq.onupgradeneeded = () => { rq.result.createObjectStore('luts', { keyPath: 'name' }); };
+    rq.onsuccess = () => res(rq.result);
+    rq.onerror = () => res(null);
+  });
+}
+async function idbLUTPut(name, kind, blob) {
+  const db = await openLUTDB(); if (!db) return false;
+  return new Promise((res) => {
+    const tx = db.transaction('luts', 'readwrite');
+    tx.objectStore('luts').put({ name, kind, blob, ts: Date.now() });
+    tx.oncomplete = () => res(true);
+    tx.onerror = () => res(false);
+  });
+}
+async function idbLUTAll() {
+  const db = await openLUTDB(); if (!db) return [];
+  return new Promise((res) => {
+    const rq = db.transaction('luts', 'readonly').objectStore('luts').getAll();
+    rq.onsuccess = () => res(rq.result || []);
+    rq.onerror = () => res([]);
+  });
+}
+async function idbLUTDelete(name) {
+  const db = await openLUTDB(); if (!db) return;
+  return new Promise((res) => {
+    const tx = db.transaction('luts', 'readwrite');
+    tx.objectStore('luts').delete(name);
+    tx.oncomplete = () => res();
+    tx.onerror = () => res();
+  });
+}
+async function applyStoredLUT(entry) {
+  try {
+    if (entry.kind === 'cube') {
+      const lut = parseCUBE(await entry.blob.text());
+      setLUT(lut);
+      S.lutName = entry.name;
+    } else {
+      const url = URL.createObjectURL(entry.blob);
+      const img = new Image();
+      await new Promise((res2, rej) => { img.onload = res2; img.onerror = rej; img.src = url; });
+      const cv = document.createElement('canvas');
+      cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+      const ctx = cv.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const lut = haldToLUT(ctx.getImageData(0, 0, cv.width, cv.height).data, cv.width);
+      setLUT(lut);
+      S.lutName = entry.name;
+      URL.revokeObjectURL(url);
+    }
+    try { localStorage.setItem('filmlab_last_lut', entry.name); } catch (e) {}
+    buildPanel();
+    scheduleRender();
+  } catch (err) { toast('LUT မရပါ — ' + err.message, 3200); }
+}
+async function refreshLUTLibrary(autoApply) {
+  const all = await idbLUTAll();
+  lutLibrary = all.map(e => ({ name: e.name, kind: e.kind }));
+  renderLUTLibrary();
+  if (autoApply) {
+    let last = null;
+    try { last = localStorage.getItem('filmlab_last_lut'); } catch (e) {}
+    const entry = all.find(e => e.name === last) || null;
+    if (entry && lutSizeN === 0) applyStoredLUT(entry);
+  }
+}
+function renderLUTLibrary() {
+  const box = $('lutLibrary');
+  if (!box) return;
+  box.innerHTML = '';
+  if (!lutLibrary.length) return;
+  const lbl = document.createElement('div');
+  lbl.className = 'note';
+  lbl.textContent = 'သိမ်းထားတဲ့ LUT တွေ (ဒီ device ထဲမှာ):';
+  box.appendChild(lbl);
+  const row = document.createElement('div');
+  row.className = 'chips';
+  for (const e of lutLibrary) {
+    const c = document.createElement('button');
+    c.className = 'chip' + (S.lutName === e.name ? ' active' : '');
+    c.textContent = '🎬 ' + e.name;
+    c.addEventListener('click', async () => {
+      const all = await idbLUTAll();
+      const entry = all.find(x => x.name === e.name);
+      if (entry) applyStoredLUT(entry);
+    });
+    row.appendChild(c);
+    const del = document.createElement('button');
+    del.className = 'chip';
+    del.textContent = '✕';
+    del.title = 'ဖျက်';
+    del.addEventListener('click', async () => {
+      await idbLUTDelete(e.name);
+      if (S.lutName === e.name) { clearLUT(); S.lutName = ''; try { localStorage.removeItem('filmlab_last_lut'); } catch (err) {} }
+      refreshLUTLibrary(false);
+      buildPanel();
+      scheduleRender();
+    });
+    row.appendChild(del);
+  }
+  box.appendChild(row);
+}
+
+/* ================= Crop + Heal overlays ================= */
+function syncOverlays() {
+  const has = !!activePhoto();
+  $('cropOverlay').style.display = (activeTab === 'crop' && has) ? 'block' : 'none';
+  $('healOverlay').style.display = (activeTab === 'heal' && has) ? 'block' : 'none';
+  if (activeTab === 'crop') updateCropOverlay();
+  if (activeTab === 'heal') refreshHealMarkers();
+}
+function overlayFrac(e, ov) {
+  const r = ov.getBoundingClientRect();
+  return { x: clamp((e.clientX - r.left) / Math.max(1, r.width), -0.25, 1.25), y: clamp((e.clientY - r.top) / Math.max(1, r.height), -0.25, 1.25) };
+}
+
+/* ---------- Crop ---------- */
+let cropAspect = null; // { aw, ah } in pixels, or null = free
+let cropDrag = null;
+const CROP_ASPECTS = [
+  ['Free', null], ['မူရင်း', 'orig'], ['1:1', [1, 1]], ['3:2', [3, 2]], ['2:3', [2, 3]],
+  ['4:3', [4, 3]], ['3:4', [3, 4]], ['16:9', [16, 9]], ['9:16', [9, 16]], ['5:4', [5, 4]], ['4:5', [4, 5]]
+];
+function panelCrop(panel) {
+  const chips = document.createElement('div');
+  chips.className = 'chips';
+  for (const [label, val] of CROP_ASPECTS) {
+    const c = document.createElement('button');
+    const isActive = (val === null && cropAspect === null) || (val === 'orig' && cropAspect && cropAspect.orig) || (Array.isArray(val) && cropAspect && cropAspect.aw === val[0] && cropAspect.ah === val[1]);
+    c.className = 'chip' + (isActive ? ' active' : '');
+    c.textContent = label;
+    c.addEventListener('click', () => {
+      if (val === null) cropAspect = null;
+      else if (val === 'orig') { cropAspect = { aw: imgW, ah: imgH, orig: true }; S.crop = fitCropAspect(S.crop, imgW, imgH, imgW, imgH); }
+      else { cropAspect = { aw: val[0], ah: val[1] }; S.crop = fitCropAspect(S.crop, val[0], val[1], imgW, imgH); }
+      markEdited();
+      buildPanel();
+    });
+    chips.appendChild(c);
+  }
+  panel.appendChild(chips);
+  const info = document.createElement('div');
+  info.className = 'note';
+  info.id = 'cropInfo';
+  panel.appendChild(info);
+  updateCropInfo();
+  const rb = document.createElement('div');
+  rb.className = 'rowBtns';
+  const rst = document.createElement('button');
+  rst.className = 'chip';
+  rst.textContent = '↺ Crop ရှင်း (အပြည့်)';
+  rst.addEventListener('click', () => { S.crop = { x: 0, y: 0, w: 1, h: 1 }; markEdited(); buildPanel(); });
+  rb.appendChild(rst);
+  panel.appendChild(rb);
+  note(panel, 'ဘောင်ကို ဆွဲ ရွှေ့၊ ထောင့်တွေကို ဆွဲ ချုံ့/ချဲ့ လုပ်ပါ။ Crop က export အရွယ်ကို သတ်မှတ် တယ် — တခြား tab တွေမှာ crop ပြီးသား ပုံပဲ မြင်ရမယ်။');
+}
+function updateCropInfo() {
+  const el = $('cropInfo');
+  if (!el || !imgW) return;
+  const o = cropOutSize(S.crop, imgW, imgH);
+  el.textContent = 'Export အရွယ်: ' + o.w + ' × ' + o.h + ' px';
+}
+const CROP_HPOS = { nw: [0, 0], n: [0.5, 0], ne: [1, 0], e: [1, 0.5], se: [1, 1], s: [0.5, 1], sw: [0, 1], w: [0, 0.5] };
+function updateCropOverlay() {
+  const ov = $('cropOverlay');
+  if (!ov) return;
+  ov.innerHTML = '';
+  if (!activePhoto()) return;
+  const c = S.crop;
+  const rect = document.createElement('div');
+  rect.className = 'cropRect';
+  rect.style.left = (c.x * 100) + '%';
+  rect.style.top = (c.y * 100) + '%';
+  rect.style.width = (c.w * 100) + '%';
+  rect.style.height = (c.h * 100) + '%';
+  const th = document.createElement('div');
+  th.className = 'thirds';
+  rect.appendChild(th);
+  ov.appendChild(rect);
+  for (const hd of Object.keys(CROP_HPOS)) {
+    const el = document.createElement('div');
+    el.className = 'cropHandle';
+    el.dataset.handle = hd;
+    el.style.left = ((c.x + CROP_HPOS[hd][0] * c.w) * 100) + '%';
+    el.style.top = ((c.y + CROP_HPOS[hd][1] * c.h) * 100) + '%';
+    ov.appendChild(el);
+  }
+}
+function resizeCropAspect(c0, hd, f) {
+  const A = cropAspect.aw / cropAspect.ah;
+  const x2 = c0.x + c0.w, y2 = c0.y + c0.h;
+  let ax, ay;
+  if (hd === 'nw') { ax = x2; ay = y2; } else if (hd === 'ne') { ax = c0.x; ay = y2; }
+  else if (hd === 'sw') { ax = x2; ay = c0.y; } else if (hd === 'se') { ax = c0.x; ay = c0.y; }
+  else if (hd === 'e') { ax = c0.x; ay = c0.y + c0.h / 2; } else if (hd === 'w') { ax = x2; ay = c0.y + c0.h / 2; }
+  else if (hd === 's') { ax = c0.x + c0.w / 2; ay = c0.y; } else { ax = c0.x + c0.w / 2; ay = y2; }
+  let wPx = Math.abs(f.x - ax) * imgW;
+  let hPx = wPx / A;
+  if (Math.abs(f.y - ay) * imgH > hPx) { hPx = Math.abs(f.y - ay) * imgH; wPx = hPx * A; }
+  const w = wPx / imgW, h = hPx / imgH;
+  let x, y;
+  if (hd === 'nw' || hd === 'sw' || hd === 'w') x = ax - w;
+  else if (hd === 'e' || hd === 'se' || hd === 'ne') x = ax;
+  else x = ax - w / 2;
+  if (hd === 'nw' || hd === 'ne' || hd === 'n') y = ay - h;
+  else if (hd === 's' || hd === 'se' || hd === 'sw') y = ay;
+  else y = ay - h / 2;
+  return clampCrop({ x, y, w, h });
+}
+$('cropOverlay').addEventListener('pointerdown', (e) => {
+  if (!activePhoto()) return;
+  const ov = $('cropOverlay');
+  const f = overlayFrac(e, ov);
+  cropDrag = { handle: (e.target.dataset && e.target.dataset.handle) || 'move', start: deepClone(S.crop), sx: f.x, sy: f.y };
+  ov.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+$('cropOverlay').addEventListener('pointermove', (e) => {
+  if (!cropDrag) return;
+  const ov = $('cropOverlay');
+  const f = overlayFrac(e, ov);
+  const c0 = cropDrag.start, hd = cropDrag.handle;
+  let c;
+  if (hd === 'move') {
+    c = clampCrop({ x: c0.x + (f.x - cropDrag.sx), y: c0.y + (f.y - cropDrag.sy), w: c0.w, h: c0.h });
+  } else if (cropAspect) {
+    c = resizeCropAspect(c0, hd, f);
+  } else {
+    let { x, y, w, h } = c0;
+    const x2 = x + w, y2 = y + h;
+    if (hd.includes('e')) w = f.x - x;
+    if (hd.includes('s')) h = f.y - y;
+    if (hd.includes('w')) { w = x2 - f.x; x = f.x; }
+    if (hd === 'n' || hd === 'ne' || hd === 'nw') { h = y2 - f.y; y = f.y; }
+    c = clampCrop({ x, y, w, h });
+  }
+  S.crop = c;
+  updateCropOverlay();
+  updateCropInfo();
+});
+$('cropOverlay').addEventListener('pointerup', () => { if (cropDrag) { cropDrag = null; markEdited(); } });
+$('cropOverlay').addEventListener('pointercancel', () => { cropDrag = null; });
+
+/* ---------- Heal ---------- */
+let healMode = 'add';
+function panelHeal(panel) {
+  sliderRow(panel, 'Brush အရွယ်', () => S.healSize, v => S.healSize = v, 1, 12, 0.5, 4, (v) => v.toFixed(1) + '%');
+  const chips = document.createElement('div');
+  chips.className = 'chips';
+  [['add', '✚ ဖြည့်မယ်'], ['del', '✖ ဖျက်မယ်']].forEach(([m, lb]) => {
+    const c = document.createElement('button');
+    c.className = 'chip' + (healMode === m ? ' active' : '');
+    c.textContent = lb;
+    c.addEventListener('click', () => { healMode = m; buildPanel(); });
+    chips.appendChild(c);
+  });
+  panel.appendChild(chips);
+  const cnt = document.createElement('div');
+  cnt.className = 'note';
+  cnt.innerHTML = 'လက်ရှိ စက်: <b id="healCount">0</b> / 12';
+  panel.appendChild(cnt);
+  const rb = document.createElement('div');
+  rb.className = 'rowBtns';
+  const clr = document.createElement('button');
+  clr.className = 'chip';
+  clr.textContent = '🗑 အကုန် ဖျက်';
+  clr.addEventListener('click', () => { S.heals = []; markEdited(); refreshHealMarkers(); scheduleRender(); });
+  rb.appendChild(clr);
+  panel.appendChild(rb);
+  note(panel, 'ပုံပေါ် ထိလိုက်ရင် အဲ့ဒီ နေရာကို အပေါ်ဘက် အနီးအနား pixel နဲ့ အစားထိုး ဖုံးပေးတယ် (clone-blend နည်း) — dust အစက်၊ အမျှင်၊ ဝက်ခြံ လို သေးသေးတွေ အတွက် သင့်တော်တယ်။ content-aware မဟုတ်သေးလို့ အကြီးစား ပြင်တာတော့ မရပါ။');
+  refreshHealMarkers();
+}
+function refreshHealMarkers() {
+  const ov = $('healOverlay');
+  if (!ov) return;
+  ov.innerHTML = '';
+  const hc = $('healCount');
+  if (hc) hc.textContent = S.heals ? S.heals.length : 0;
+  if (activeTab !== 'heal' || !activePhoto()) return;
+  const cr = cropEditActive ? { x: 0, y: 0, w: 1, h: 1 } : (S.crop || { x: 0, y: 0, w: 1, h: 1 });
+  const W = ov.clientWidth || 300;
+  for (const hh of (S.heals || [])) {
+    const d = document.createElement('div');
+    d.className = 'healDot' + (healMode === 'del' ? ' del' : '');
+    d.style.left = (((hh.x - cr.x) / cr.w) * 100) + '%';
+    d.style.top = (((hh.y - cr.y) / cr.h) * 100) + '%';
+    const px = Math.max(12, (2 * hh.r / cr.w) * W);
+    d.style.width = px + 'px';
+    d.style.height = px + 'px';
+    ov.appendChild(d);
+  }
+}
+$('healOverlay').addEventListener('pointerdown', (e) => {
+  if (!activePhoto()) return;
+  const ov = $('healOverlay');
+  const f = overlayFrac(e, ov);
+  const cr = S.crop || { x: 0, y: 0, w: 1, h: 1 };
+  const ix = clamp(cr.x + clamp(f.x, 0, 1) * cr.w, 0, 1);
+  const iy = clamp(cr.y + clamp(f.y, 0, 1) * cr.h, 0, 1);
+  if (healMode === 'del') {
+    let best = -1, bd = 1e9;
+    (S.heals || []).forEach((hh, i) => {
+      const d = Math.hypot(hh.x - ix, (hh.y - iy) * (imgW / Math.max(1, imgH)));
+      if (d < bd) { bd = d; best = i; }
+    });
+    if (best >= 0 && bd < Math.max(S.heals[best].r * 1.7, 0.02)) { S.heals.splice(best, 1); toast('စက် ဖျက်ပြီး'); }
+  } else {
+    if ((S.heals || []).length >= 12) { toast('အများဆုံး ၁၂ စက်ပဲ ရပါတယ်'); return; }
+    const rad = S.healSize / 200;
+    let dy = -(2.4 * rad * imgW) / Math.max(1, imgH);
+    if (iy + dy < rad) dy = -dy;
+    S.heals.push({ x: ix, y: iy, r: rad, dx: 0, dy });
+  }
+  markEdited();
+  refreshHealMarkers();
+  scheduleRender();
+  e.preventDefault();
+});
+
+/* ---------- preview zoom gestures (pinch / wheel / drag-pan) ---------- */
+const zoomPtrs = new Map();
+let pinchStart = null;
+const stageInnerEl = $('stageInner');
+stageInnerEl.addEventListener('pointerdown', (e) => {
+  if (activeTab === 'crop' || activeTab === 'heal') return;
+  zoomPtrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (zoomPtrs.size === 2) {
+    const [a, b] = [...zoomPtrs.values()];
+    pinchStart = { d: Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), z: viewT.z };
+    clearTimeout(holdTimer);
+  }
+});
+stageInnerEl.addEventListener('pointermove', (e) => {
+  if (!zoomPtrs.has(e.pointerId)) return;
+  const prev = zoomPtrs.get(e.pointerId);
+  zoomPtrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinchStart && zoomPtrs.size === 2) {
+    const [a, b] = [...zoomPtrs.values()];
+    const d = Math.max(20, Math.hypot(a.x - b.x, a.y - b.y));
+    setViewZoom(pinchStart.z * (d / pinchStart.d), (a.x + b.x) / 2, (a.y + b.y) / 2);
+  } else if (zoomPtrs.size === 1 && viewT.z > 1) {
+    const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+    const dp = viewCanvas._downPos;
+    const moved = dp ? Math.abs(e.clientX - dp.x) + Math.abs(e.clientY - dp.y) : 99;
+    if (moved > 9 && (dx || dy)) {
+      clearTimeout(holdTimer);
+      viewT.tx += dx; viewT.ty += dy;
+      applyViewTransform();
+    }
+  }
+});
+const zoomPtrEnd = (e) => { zoomPtrs.delete(e.pointerId); if (zoomPtrs.size < 2) pinchStart = null; };
+stageInnerEl.addEventListener('pointerup', zoomPtrEnd);
+stageInnerEl.addEventListener('pointercancel', zoomPtrEnd);
+stageInnerEl.addEventListener('wheel', (e) => {
+  if (activeTab === 'crop' || activeTab === 'heal' || !activePhoto()) return;
+  e.preventDefault();
+  setViewZoom(viewT.z * Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
+}, { passive: false });
+viewCanvas.addEventListener('dblclick', (e) => {
+  if (activeTab === 'crop' || activeTab === 'heal') return;
+  if (viewT.z > 1) resetViewZoom();
+  else setViewZoom(2.5, e.clientX, e.clientY);
+});
 </script>
 <script>
 'use strict';
@@ -1035,6 +1600,7 @@ function activatePhoto(id) {
   if (segPhotoId !== id) { useRadialMask = true; }
   $('emptyMsg').style.display = 'none';
   viewCanvas.style.display = 'block';
+  resetViewZoom();
   updateCurvesTexture();
   buildPanel();
   renderStrip();
@@ -1080,7 +1646,9 @@ viewCanvas.addEventListener('pointerdown', (e) => {
 viewCanvas.addEventListener('pointerup', (e) => {
   clearTimeout(holdTimer);
   if (comparing) { comparing = false; scheduleRender(); return; }
-  if (Date.now() - (viewCanvas._downAt || 0) < 300 && activeTab === 'portrait' && useRadialMask) {
+  const dp = viewCanvas._downPos;
+  const tapDist = dp ? Math.abs(e.clientX - dp.x) + Math.abs(e.clientY - dp.y) : 99;
+  if (Date.now() - (viewCanvas._downAt || 0) < 300 && tapDist < 10 && activeTab === 'portrait' && useRadialMask) {
     const r = viewCanvas.getBoundingClientRect();
     S.focusX = clamp((e.clientX - r.left) / r.width, 0, 1);
     S.focusY = clamp((e.clientY - r.top) / r.height, 0, 1);
@@ -1100,7 +1668,10 @@ $('fileLUT').addEventListener('change', async (e) => {
       const lut = parseCUBE(await f.text());
       setLUT(lut);
       S.lutName = lut.title || f.name.replace(/\.cube$/i, '');
-      toast('LUT တင်ပြီး — ' + S.lutName + ' (' + lut.size + '³)');
+      await idbLUTPut(S.lutName, 'cube', f);
+      try { localStorage.setItem('filmlab_last_lut', S.lutName); } catch (err) {}
+      refreshLUTLibrary(false);
+      toast('LUT တင်ပြီး + သိမ်းထားပြီး — ' + S.lutName + ' (' + lut.size + '³)');
     } else {
       const url = URL.createObjectURL(f);
       const img = new Image();
@@ -1114,7 +1685,10 @@ $('fileLUT').addEventListener('change', async (e) => {
       const lut = haldToLUT(data, cv.width);
       setLUT(lut);
       S.lutName = f.name.replace(/\.png$/i, '');
-      toast('Hald LUT တင်ပြီး (' + lut.size + '³)');
+      await idbLUTPut(S.lutName, 'hald', f);
+      try { localStorage.setItem('filmlab_last_lut', S.lutName); } catch (err) {}
+      refreshLUTLibrary(false);
+      toast('Hald LUT တင်ပြီး + သိမ်းထားပြီး (' + lut.size + '³)');
       URL.revokeObjectURL(url);
     }
     buildPanel();
@@ -1166,7 +1740,11 @@ function exportPhotoBlob(ph) {
     const cur = activePhoto();
     const needSwitch = !cur || cur.id !== ph.id;
     if (needSwitch) { uploadSourceImage(ph.img); }
-    const cv = renderToPixels(ph.settings, ph.img.naturalWidth, ph.img.naturalHeight);
+    const out = cropOutSize(ph.settings.crop, ph.img.naturalWidth, ph.img.naturalHeight);
+    const savedCropEdit = cropEditActive;
+    cropEditActive = false;
+    const cv = renderToPixels(ph.settings, out.w, out.h);
+    cropEditActive = savedCropEdit;
     if (needSwitch && cur) uploadSourceImage(cur.img);
     cv.toBlob((b) => b ? resolve(b) : reject(new Error('export မရပါ')), 'image/jpeg', 0.92);
   });
@@ -1207,6 +1785,7 @@ $('btnBatch').addEventListener('click', async () => {
     for (const p of photos) {
       const st = deepClone(ph.settings);
       st.focusX = p.settings.focusX; st.focusY = p.settings.focusY;
+      st.crop = deepClone(p.settings.crop); st.heals = deepClone(p.settings.heals); st.healSize = p.settings.healSize;
       const blob = await exportPhotoBlob({ ...p, settings: st });
       zip.file(p.name.replace(/\.[^.]+$/, '') + '-filmlab.jpg', blob);
     }
@@ -1216,7 +1795,9 @@ $('btnBatch').addEventListener('click', async () => {
   } catch (err) {
     toast('ZIP မရလို့ တစ်ပုံချင်း ထုတ်ပေးမယ်', 3200);
     for (const p of photos) {
-      const blob = await exportPhotoBlob({ ...p, settings: deepClone(ph.settings) });
+      const st = deepClone(ph.settings);
+      st.crop = deepClone(p.settings.crop); st.heals = deepClone(p.settings.heals); st.healSize = p.settings.healSize;
+      const blob = await exportPhotoBlob({ ...p, settings: st });
       downloadBlob(blob, p.name.replace(/\.[^.]+$/, '') + '-filmlab.jpg');
       await new Promise(r => setTimeout(r, 450));
     }
@@ -1244,6 +1825,7 @@ function renderRecipeList() {
     ap.addEventListener('click', () => {
       const fresh = parseRecipe(JSON.stringify(r)).settings;
       fresh.lutName = S.lutName; fresh.lutIntensity = S.lutIntensity;
+      fresh.crop = deepClone(S.crop); fresh.heals = deepClone(S.heals); fresh.healSize = S.healSize;
       replaceSettings(fresh);
       $('recipeDlg').close();
       toast('Recipe သုံးပြီး — ' + r.name);
@@ -1284,6 +1866,31 @@ $('fileRecipe').addEventListener('change', async (e) => {
     renderRecipeList();
     toast('Recipe သွင်းပြီး — ' + name);
   } catch (err) { toast('Recipe ဖိုင် မရပါ — ' + err.message, 3400); }
+});
+
+/* ================= XMP import (RNI etc.) ================= */
+$('fileXMP').addEventListener('change', async (e) => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  if (!files.length) return;
+  const list = loadRecipes();
+  let added = 0, skipped = 0;
+  for (const f of files) {
+    try {
+      const { name, patch, found } = parseXMPSettings(await f.text());
+      if (!found) { skipped++; continue; }
+      const rname = name || f.name.replace(/\.xmp$/i, '');
+      const settings = applyPatch(defaultSettings(), patch);
+      const existing = list.findIndex(r => r.name === rname);
+      const rec = { app: 'FilmLab', version: 1, name: rname, settings };
+      if (existing >= 0) list[existing] = rec; else list.push(rec);
+      added++;
+    } catch (err) { skipped++; }
+  }
+  saveRecipes(list);
+  renderRecipeList();
+  if (added) toast('XMP ' + added + ' ခု recipe အဖြစ် သွင်းပြီး — 💾 Recipe မှာ သုံးလို့ ရပြီ' + (skipped ? ' (' + skipped + ' ခု ကျော်)' : ''), 3600);
+  else toast('XMP ထဲက ဖတ်လို့ ရတာ မတွေ့ပါ', 3200);
 });
 
 /* ================= Segmentation (MediaPipe, lazy) ================= */
@@ -1341,6 +1948,7 @@ async function ensureSegmentation() {
 const glOK = initGL();
 buildTabs();
 buildPanel();
+refreshLUTLibrary(true);
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
