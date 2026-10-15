@@ -1,1 +1,1349 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FilmLab — Photo Editor</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#101012">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: #101012; color: #e8e8ea; font-family: -apple-system, "Helvetica Neue", "Noto Sans Myanmar", sans-serif; }
+  button { font-family: inherit; }
+  #topbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #26262a; position: sticky; top: 0; background: #101012; z-index: 20; }
+  #topbar .logo { font-weight: 700; letter-spacing: .5px; font-size: 15px; margin-right: auto; }
+  #topbar .logo span { color: #d4a24a; }
+  .tbtn { background: #1d1d20; color: #e8e8ea; border: 1px solid #333338; border-radius: 9px; padding: 7px 11px; font-size: 12.5px; cursor: pointer; }
+  .tbtn:active { background: #2a2a2f; }
+  .tbtn.primary { background: #d4a24a; border-color: #d4a24a; color: #17130a; font-weight: 700; }
+  #strip { display: flex; gap: 8px; overflow-x: auto; padding: 10px 12px 2px; scrollbar-width: none; }
+  #strip::-webkit-scrollbar { display: none; }
+  .thumb { flex: 0 0 auto; width: 54px; height: 54px; border-radius: 8px; overflow: hidden; border: 2px solid transparent; cursor: pointer; position: relative; background: #1d1d20; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb.active { border-color: #d4a24a; }
+  .thumb .badge { position: absolute; right: 2px; bottom: 2px; background: rgba(0,0,0,.65); color: #ffd98a; font-size: 9px; padding: 1px 4px; border-radius: 4px; display: none; }
+  .thumb.edited .badge { display: block; }
+  #stage { display: flex; align-items: center; justify-content: center; padding: 12px; min-height: 200px; }
+  #view { max-width: 100%; max-height: 52vh; border-radius: 6px; box-shadow: 0 6px 30px rgba(0,0,0,.5); touch-action: none; background: #18181b; }
+  #emptyMsg { color: #8b8b92; font-size: 13.5px; text-align: center; line-height: 1.9; padding: 30px 10px; }
+  #tabs { display: flex; gap: 6px; overflow-x: auto; padding: 4px 12px 10px; scrollbar-width: none; position: sticky; top: 53px; background: #101012; z-index: 15; }
+  #tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: 0 0 auto; background: transparent; color: #a7a7ae; border: 1px solid #333338; border-radius: 999px; padding: 6px 13px; font-size: 12.5px; cursor: pointer; }
+  .tab.active { background: #e8e8ea; color: #121214; border-color: #e8e8ea; font-weight: 700; }
+  #panel { padding: 2px 16px 40px; max-width: 640px; margin: 0 auto; }
+  .prow { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #1e1e22; }
+  .prow label { flex: 0 0 108px; font-size: 12.5px; color: #c9c9cf; }
+  .prow output { flex: 0 0 38px; text-align: right; font-size: 12px; color: #d4a24a; font-variant-numeric: tabular-nums; }
+  input[type=range] { flex: 1; appearance: none; -webkit-appearance: none; height: 3px; border-radius: 2px; background: #3a3a40; outline: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 17px; height: 17px; border-radius: 50%; background: #e8e8ea; border: none; box-shadow: 0 1px 5px rgba(0,0,0,.6); cursor: pointer; }
+  input[type=range]::-moz-range-thumb { width: 17px; height: 17px; border-radius: 50%; background: #e8e8ea; border: none; cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 0 2px; }
+  .chip { background: #1d1d20; border: 1px solid #333338; color: #d8d8dd; border-radius: 999px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  .chip.active { background: #d4a24a; border-color: #d4a24a; color: #17130a; font-weight: 700; }
+  .note { font-size: 11.5px; color: #8b8b92; line-height: 1.8; padding: 8px 0; }
+  .note b { color: #c9c9cf; }
+  .presetGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; padding: 10px 0; }
+  .preset { background: #1d1d20; border: 1px solid #2c2c31; border-radius: 10px; padding: 12px 8px; font-size: 12px; text-align: center; cursor: pointer; color: #e8e8ea; line-height: 1.5; }
+  .preset.active { border-color: #d4a24a; color: #ffd98a; }
+  .preset small { display: block; color: #8b8b92; font-size: 10.5px; margin-top: 2px; }
+  .rowBtns { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 0; }
+  #curveWrap { padding: 10px 0; }
+  #curveCanvas { background: #17171a; border: 1px solid #2c2c31; border-radius: 10px; touch-action: none; display: block; margin: 0 auto; }
+  dialog { background: #1a1a1e; color: #e8e8ea; border: 1px solid #333338; border-radius: 14px; padding: 18px; width: min(92vw, 380px); }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog h3 { margin: 0 0 10px; font-size: 14.5px; }
+  dialog input[type=text] { width: 100%; background: #101012; border: 1px solid #3a3a40; border-radius: 8px; color: #e8e8ea; padding: 9px; font-size: 13px; margin-bottom: 10px; }
+  .recipeItem { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #26262a; font-size: 13px; }
+  .recipeItem .nm { flex: 1; }
+  .mini { background: #26262b; border: 1px solid #3a3a40; color: #e8e8ea; border-radius: 7px; padding: 5px 9px; font-size: 11.5px; cursor: pointer; }
+  .mini.danger { color: #ff9a9a; }
+  #toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(20px); background: #26262b; color: #f2f2f4; border: 1px solid #3f3f46; padding: 9px 16px; border-radius: 999px; font-size: 12.5px; opacity: 0; pointer-events: none; transition: all .25s; z-index: 50; max-width: 92vw; text-align: center; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #glwarn { display: none; margin: 10px 12px; padding: 10px 12px; background: #3a2c14; border: 1px solid #8a6a25; border-radius: 10px; font-size: 12px; line-height: 1.7; color: #ffd98a; }
+</style>
+</head>
+<body>
+<div id="topbar">
+  <div class="logo">Film<span>Lab</span></div>
+  <button class="tbtn" id="btnOpen">📂 ဖွင့်မယ်</button>
+  <button class="tbtn" id="btnRecipe">💾 Recipe</button>
+  <button class="tbtn" id="btnBatch">⬇ အစုလိုက်</button>
+  <button class="tbtn primary" id="btnExport">Export</button>
+</div>
+<div id="glwarn">⚠️ ဒီ browser မှာ WebGL မရလို့ ပုံ ပြင် မရပါ — Safari/Chrome နောက်ဆုံး version နဲ့ စမ်းကြည့်ပါ။</div>
+<div id="strip"></div>
+<div id="stage">
+  <canvas id="view" width="320" height="240" style="display:none"></canvas>
+  <div id="emptyMsg">ဓာတ်ပုံ ဖွင့်ပြီး စမ်းကြည့်ပါ<br><span style="font-size:12px">ပုံ အားလုံး ဖုန်း/ကွန်ပျူတာ ထဲမှာပဲ ပြင်တာပါ — server ပေါ် မတက်ဘူး</span></div>
+</div>
+<div id="tabs"></div>
+<div id="panel"></div>
+<div id="toast"></div>
 
+<dialog id="recipeDlg">
+  <h3>💾 Recipe များ</h3>
+  <div style="display:flex; gap:6px; margin-bottom:6px">
+    <input type="text" id="recipeName" placeholder="Recipe အမည် (ဥပမာ — My Portra)">
+    <button class="mini" id="btnSaveRecipe" style="white-space:nowrap">သိမ်းမယ်</button>
+  </div>
+  <div id="recipeList"></div>
+  <div class="rowBtns">
+    <button class="mini" id="btnExportRecipe">Recipe ဖိုင် ထုတ်မယ်</button>
+    <button class="mini" id="btnImportRecipe">Recipe ဖိုင် သွင်းမယ်</button>
+    <button class="mini" id="btnCloseRecipe">ပိတ်မယ်</button>
+  </div>
+</dialog>
+
+<input type="file" id="fileOpen" accept="image/*" multiple hidden>
+<input type="file" id="fileLUT" accept=".cube,.png" hidden>
+<input type="file" id="fileRecipe" accept=".json,application/json" hidden>
+
+<script>
+'use strict';
+/* ================================================================
+   FilmLab — personal photo editor (vanilla JS + WebGL1)
+   All processing happens on-device. No uploads, no accounts.
+   ================================================================ */
+
+// === PURE START === (extracted by unit tests)
+function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
+
+function defaultSettings() {
+  return {
+    exposure: 0, brightness: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0, fade: 0,
+    temp: 0, tint: 0, vibrance: 0, saturation: 0,
+    hsl: {
+      red: { h: 0, s: 0, l: 0 }, orange: { h: 0, s: 0, l: 0 }, yellow: { h: 0, s: 0, l: 0 }, green: { h: 0, s: 0, l: 0 },
+      aqua: { h: 0, s: 0, l: 0 }, blue: { h: 0, s: 0, l: 0 }, purple: { h: 0, s: 0, l: 0 }, magenta: { h: 0, s: 0, l: 0 }
+    },
+    curves: {
+      master: [[0, 0], [0.25, 0.25], [0.5, 0.5], [0.75, 0.75], [1, 1]],
+      r: [[0, 0], [1, 1]], g: [[0, 0], [1, 1]], b: [[0, 0], [1, 1]]
+    },
+    lutName: '', lutIntensity: 80,
+    grain: 0, grainSize: 50, vignette: 0, sharpen: 0, leak: 0, dust: 0,
+    distortion: 0, perspV: 0, perspH: 0, rotate: 0,
+    bokeh: 0, focusX: 0.5, focusY: 0.42
+  };
+}
+
+const FACTORY_PRESETS = [
+  { id: 'natural', name: 'Natural Film', sub: 'သဘာဝ ဖလင် — skin texture မပျက်', patch: {
+      contrast: 6, fade: 8, temp: 4, vibrance: 10, saturation: -4, grain: 20, vignette: 10, sharpen: 15,
+      curves: { master: [[0, 0.03], [0.25, 0.26], [0.5, 0.52], [0.75, 0.77], [1, 0.98]] } } },
+  { id: 'portra', name: 'Portra Warm', sub: 'နွေး · portrait', patch: {
+      temp: 9, tint: 2, saturation: -6, vibrance: 8, contrast: 2, fade: 12, grain: 16, highlights: -10, sharpen: 10,
+      curves: { master: [[0, 0.04], [0.25, 0.27], [0.5, 0.51], [0.75, 0.75], [1, 0.97]],
+                r: [[0, 0], [0.5, 0.53], [1, 1]], b: [[0, 0], [0.5, 0.46], [1, 0.97]] } } },
+  { id: 'mono', name: 'Mono', sub: 'B&W · HP5 ပုံစံ', patch: {
+      saturation: -100, contrast: 14, blacks: -6, grain: 34, vignette: 14, sharpen: 10,
+      curves: { master: [[0, 0.02], [0.25, 0.22], [0.5, 0.5], [0.75, 0.79], [1, 0.99]] } } },
+  { id: 'instant', name: 'Faded Instant', sub: 'ဖျော့ · retro', patch: {
+      fade: 30, saturation: -16, temp: 6, contrast: -8, grain: 20, vignette: 20, leak: 14,
+      curves: { master: [[0, 0.09], [0.5, 0.52], [1, 0.94]] } } },
+  { id: 'chrome', name: 'Chrome Pop', sub: 'စူး · အရောင် ထက်', patch: {
+      contrast: 16, saturation: 12, vibrance: 14, highlights: -6, sharpen: 20, grain: 6 } },
+  { id: 'clean', name: 'Clean', sub: 'အသန့် — ပြင်ရုံ သက်သက်', patch: { sharpen: 12 } }
+];
+
+function applyPatch(settings, patch) {
+  const out = deepClone(settings);
+  for (const k of Object.keys(patch)) {
+    if (patch[k] && typeof patch[k] === 'object' && !Array.isArray(patch[k]) && out[k] && typeof out[k] === 'object') {
+      for (const k2 of Object.keys(patch[k])) out[k][k2] = deepClone(patch[k][k2]);
+    } else out[k] = deepClone(patch[k]);
+  }
+  return out;
+}
+
+// Smooth curve through control points (Catmull-Rom), returns y for x in [0,1]
+function curveEval(points, x) {
+  const pts = points.slice().sort((a, b) => a[0] - b[0]);
+  if (x <= pts[0][0]) return pts[0][1];
+  if (x >= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
+  let i = 0;
+  while (i < pts.length - 2 && x > pts[i + 1][0]) i++;
+  const p1 = pts[i], p2 = pts[i + 1];
+  // phantom endpoints by reflection (duplicating endpoints halves the tangent and bows the curve)
+  const p0 = i > 0 ? pts[i - 1] : [2 * p1[0] - p2[0], 2 * p1[1] - p2[1]];
+  const p3 = i + 2 < pts.length ? pts[i + 2] : [2 * p2[0] - p1[0], 2 * p2[1] - p1[1]];
+  const t = (x - p1[0]) / Math.max(1e-6, (p2[0] - p1[0]));
+  const t2 = t * t, t3 = t2 * t;
+  const y = 0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * t + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
+  return clamp(y, 0, 1);
+}
+
+// Combined per-channel curve LUT (master then channel), 256 entries per channel
+function buildCurvesLUT(curves) {
+  const lut = { r: new Uint8Array(256), g: new Uint8Array(256), b: new Uint8Array(256) };
+  const chans = ['r', 'g', 'b'];
+  for (let v = 0; v < 256; v++) {
+    const afterMaster = curveEval(curves.master, v / 255);
+    for (const c of chans) lut[c][v] = Math.round(clamp(curveEval(curves[c], afterMaster), 0, 1) * 255);
+  }
+  return lut;
+}
+
+// Parse a .cube LUT file -> { size, data: Float32Array (size^3 * 3), title }
+function parseCUBE(text) {
+  const lines = text.split(/\r?\n/);
+  let size = 0, title = '';
+  const data = [];
+  for (let raw of lines) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const up = line.toUpperCase();
+    if (up.startsWith('TITLE')) { const m = line.match(/"([^"]*)"/); if (m) title = m[1]; continue; }
+    if (up.startsWith('LUT_3D_SIZE')) { size = parseInt(line.split(/\s+/)[1], 10); continue; }
+    if (up.startsWith('LUT_1D') || up.startsWith('DOMAIN')) continue;
+    const parts = line.split(/\s+/).map(Number);
+    if (parts.length >= 3 && parts.every(n => Number.isFinite(n))) data.push(parts[0], parts[1], parts[2]);
+  }
+  if (!size || data.length < size * size * size * 3) throw new Error('CUBE ဖိုင် မှား — LUT_3D_SIZE သို့ data မပြည့်စုံ');
+  return { size, data: Float32Array.from(data.slice(0, size * size * size * 3)), title };
+}
+
+// Pack an RGB LUT (size^3, r-fastest order) into a 2D texture image:
+// width = size*size, height = size; pixel (b*size + r, g) = entry (r, g, b)
+function packLUTTexture(lut) {
+  const N = lut.size, w = N * N, h = N;
+  const px = new Uint8Array(w * h * 4);
+  for (let b = 0; b < N; b++) for (let g = 0; g < N; g++) for (let r = 0; r < N; r++) {
+    const si = ((b * N + g) * N + r) * 3;
+    const di = (g * w + (b * N + r)) * 4;
+    px[di] = clamp(Math.round(lut.data[si] * 255), 0, 255);
+    px[di + 1] = clamp(Math.round(lut.data[si + 1] * 255), 0, 255);
+    px[di + 2] = clamp(Math.round(lut.data[si + 2] * 255), 0, 255);
+    px[di + 3] = 255;
+  }
+  return { width: w, height: h, pixels: px };
+}
+
+// Decode a square Hald CLUT image (side = S^1.5, entries row-major r->g->b)
+// pixels: Uint8Array RGBA of side*side. Returns an RGB LUT { size, data }.
+function haldToLUT(pixels, side) {
+  const S = Math.round(Math.pow(side, 2 / 3));
+  if (S * S * S !== side * side) throw new Error('Hald ပုံ အရွယ် မကိုက် (512×512 သုံးပါ)');
+  const data = new Float32Array(S * S * S * 3);
+  for (let i = 0; i < S * S * S; i++) {
+    data[i * 3] = pixels[i * 4] / 255;
+    data[i * 3 + 1] = pixels[i * 4 + 1] / 255;
+    data[i * 3 + 2] = pixels[i * 4 + 2] / 255;
+  }
+  return { size: S, data };
+}
+
+// Identity (neutral) Hald pixels for the given size S (side = S^1.5)
+function identityHaldPixels(S) {
+  const side = Math.round(Math.pow(S, 1.5));
+  const px = new Uint8Array(side * side * 4);
+  for (let b = 0; b < S; b++) for (let g = 0; g < S; g++) for (let r = 0; r < S; r++) {
+    const idx = (b * S + g) * S + r;
+    px[idx * 4] = Math.round(r / (S - 1) * 255);
+    px[idx * 4 + 1] = Math.round(g / (S - 1) * 255);
+    px[idx * 4 + 2] = Math.round(b / (S - 1) * 255);
+    px[idx * 4 + 3] = 255;
+  }
+  return { side, pixels: px };
+}
+
+function serializeRecipe(name, settings) {
+  return JSON.stringify({ app: 'FilmLab', version: 1, name, settings }, null, 1);
+}
+function parseRecipe(text) {
+  const o = JSON.parse(text);
+  if (!o || o.app !== 'FilmLab' || !o.settings) throw new Error('Recipe ဖိုင် မဟုတ်ပါ');
+  const merged = applyPatch(defaultSettings(), o.settings);
+  return { name: o.name || 'Recipe', settings: merged };
+}
+function settingsDirty(a, b) { return JSON.stringify(a) !== JSON.stringify(b); }
+// === PURE END ===
+</script>
+<script>
+'use strict';
+/* ================= WebGL pipeline ================= */
+const viewCanvas = document.getElementById('view');
+const gl = viewCanvas.getContext('webgl', { preserveDrawingBuffer: false, antialias: false });
+if (!gl) document.getElementById('glwarn').style.display = 'block';
+
+const VERT = `
+attribute vec2 aPos; varying vec2 vUv;
+void main(){ vUv = aPos * 0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+const GRADE_FRAG = `
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uTex;
+uniform float uAspect, uDistort, uPerspV, uPerspH, uRotate, uZoom;
+uniform float uExposure, uBrightness, uContrast, uHighlights, uShadows, uWhites, uBlacks, uFade;
+uniform float uTemp, uTint, uVibrance, uSaturation;
+uniform vec3 uHsl[8];
+uniform sampler2D uCurves;
+uniform sampler2D uLUT; uniform float uLutSize, uLutAmt, uHasLUT;
+float lum(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+vec2 geoUv(vec2 uv0){
+  vec2 uv = uv0 - 0.5;
+  uv.x /= (1.0 + uPerspV * uv.y * 1.6);
+  uv.y /= (1.0 + uPerspH * uv.x * 1.6);
+  vec2 rp = vec2(uv.x * uAspect, uv.y);
+  float ca = cos(uRotate), sa = sin(uRotate);
+  rp = mat2(ca, -sa, sa, ca) * rp;
+  rp *= uZoom;
+  uv = vec2(rp.x / uAspect, rp.y);
+  float r2 = (uv.x * uAspect) * (uv.x * uAspect) + uv.y * uv.y;
+  uv *= (1.0 + uDistort * r2);
+  return uv + 0.5;
+}
+float hueWeight(float hDeg, float center){
+  float d = abs(hDeg - center); d = min(d, 360.0 - d);
+  return clamp(1.0 - d / 32.0, 0.0, 1.0);
+}
+vec3 applyHSL(vec3 c){
+  float mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
+  float d = mx - mn; if (d < 0.0001) return c;
+  float l = (mx + mn) * 0.5;
+  float s = l > 0.5 ? d / (2.0 - mx - mn) : d / (mx + mn);
+  float h;
+  if (mx == c.r) h = (c.g - c.b) / d + (c.g < c.b ? 6.0 : 0.0);
+  else if (mx == c.g) h = (c.b - c.r) / d + 2.0;
+  else h = (c.r - c.g) / d + 4.0;
+  h *= 60.0;
+  float centers[8];
+  centers[0]=0.0; centers[1]=30.0; centers[2]=60.0; centers[3]=125.0; centers[4]=180.0; centers[5]=240.0; centers[6]=285.0; centers[7]=325.0;
+  float hShift = 0.0, sMul = 0.0, lAdd = 0.0;
+  for (int i = 0; i < 8; i++) {
+    float w = hueWeight(h, centers[i]);
+    hShift += uHsl[i].x * w; sMul += uHsl[i].y * w; lAdd += uHsl[i].z * w;
+  }
+  h = mod(h + hShift, 360.0);
+  s = clamp(s * (1.0 + sMul * 0.01), 0.0, 1.0);
+  l = clamp(l + lAdd * 0.0025, 0.0, 1.0);
+  float cc = (1.0 - abs(2.0 * l - 1.0)) * s;
+  float x = cc * (1.0 - abs(mod(h / 60.0, 2.0) - 1.0));
+  float m = l - cc * 0.5;
+  vec3 rgb;
+  if (h < 60.0) rgb = vec3(cc, x, 0.0); else if (h < 120.0) rgb = vec3(x, cc, 0.0);
+  else if (h < 180.0) rgb = vec3(0.0, cc, x); else if (h < 240.0) rgb = vec3(0.0, x, cc);
+  else if (h < 300.0) rgb = vec3(x, 0.0, cc); else rgb = vec3(cc, 0.0, x);
+  return rgb + m;
+}
+vec3 applyLUT(vec3 c){
+  float N = uLutSize;
+  vec3 sc = clamp(c, 0.0, 1.0) * (N - 1.0);
+  float b0 = floor(sc.b), b1 = min(b0 + 1.0, N - 1.0), bf = sc.b - b0;
+  vec3 v0 = texture2D(uLUT, vec2((b0 * N + sc.r + 0.5) / (N * N), (sc.g + 0.5) / N)).rgb;
+  vec3 v1 = texture2D(uLUT, vec2((b1 * N + sc.r + 0.5) / (N * N), (sc.g + 0.5) / N)).rgb;
+  return mix(v0, v1, bf);
+}
+void main(){
+  vec2 uv = geoUv(vUv);
+  vec3 c = texture2D(uTex, clamp(uv, 0.001, 0.999)).rgb;
+  c *= pow(2.0, uExposure);
+  c += uBrightness * 0.2;
+  c.r *= 1.0 + uTemp * 0.12; c.b *= 1.0 - uTemp * 0.14;
+  c.g *= 1.0 - uTint * 0.10; c.r *= 1.0 + uTint * 0.04; c.b *= 1.0 + uTint * 0.04;
+  c = (c - 0.5) * (1.0 + uContrast * 0.6) + 0.5;
+  float L = lum(c);
+  float shM = clamp(1.0 - L, 0.0, 1.0); shM *= shM;
+  float hiM = clamp(L, 0.0, 1.0); hiM *= hiM;
+  c += uShadows * 0.30 * shM * (1.0 - c);
+  c += uHighlights * 0.30 * hiM * c;
+  float bp = -uBlacks * 0.12, wp = 1.0 - uWhites * 0.12;
+  c = clamp((c - bp) / max(0.2, wp - bp), 0.0, 1.0);
+  float lift = uFade * 0.16;
+  c = c * (1.0 - lift - uFade * 0.05) + lift;
+  float cMax = max(max(c.r, c.g), c.b), cMin = min(min(c.r, c.g), c.b);
+  float satLevel = cMax - cMin;
+  vec3 gray = vec3(lum(c));
+  float satF = max(0.0, 1.0 + uSaturation + uVibrance * (1.0 - satLevel));
+  c = mix(gray, c, satF);
+  c = applyHSL(clamp(c, 0.0, 1.0));
+  c.r = texture2D(uCurves, vec2(clamp(c.r, 0.0, 1.0), 0.5)).r;
+  c.g = texture2D(uCurves, vec2(clamp(c.g, 0.0, 1.0), 0.5)).g;
+  c.b = texture2D(uCurves, vec2(clamp(c.b, 0.0, 1.0), 0.5)).b;
+  if (uHasLUT > 0.5) c = mix(c, applyLUT(c), uLutAmt);
+  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+}`;
+
+const BLUR_FRAG = `
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uTex; uniform vec2 uStep;
+void main(){
+  vec3 s = texture2D(uTex, vUv).rgb * 0.227027;
+  s += texture2D(uTex, vUv + uStep * 1.3846).rgb * 0.3162162;
+  s += texture2D(uTex, vUv - uStep * 1.3846).rgb * 0.3162162;
+  s += texture2D(uTex, vUv + uStep * 3.2308).rgb * 0.0702703;
+  s += texture2D(uTex, vUv - uStep * 3.2308).rgb * 0.0702703;
+  gl_FragColor = vec4(s, 1.0);
+}`;
+
+const COMPOSITE_FRAG = `
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uSharp;
+uniform sampler2D uBlur;
+uniform sampler2D uMask;
+uniform float uRadial; uniform vec2 uFocus; uniform float uAspect;
+void main(){
+  vec3 sharp = texture2D(uSharp, vUv).rgb;
+  vec3 blur = texture2D(uBlur, vUv).rgb;
+  float m;
+  if (uRadial > 0.5) {
+    vec2 d = (vUv - uFocus) * vec2(uAspect, 1.0);
+    m = smoothstep(0.12, 0.55, length(d));
+  } else {
+    m = 1.0 - texture2D(uMask, vUv).r;
+  }
+  gl_FragColor = vec4(mix(sharp, blur, m), 1.0);
+}`;
+
+const FINISH_FRAG = `
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uTex; uniform vec2 uTexel; uniform vec2 uRes;
+uniform float uSharpen, uGrain, uGrainSize, uVignette, uLeak, uDust, uSeed, uAspect;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+void main(){
+  vec3 c = texture2D(uTex, vUv).rgb;
+  if (uSharpen > 0.001) {
+    vec3 nb = texture2D(uTex, vUv + vec2(uTexel.x, 0.0)).rgb + texture2D(uTex, vUv - vec2(uTexel.x, 0.0)).rgb
+            + texture2D(uTex, vUv + vec2(0.0, uTexel.y)).rgb + texture2D(uTex, vUv - vec2(0.0, uTexel.y)).rgb;
+    c += (c - nb * 0.25) * uSharpen * 1.4;
+  }
+  float L = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  if (uGrain > 0.001) {
+    float px = mix(1.0, 5.0, uGrainSize * 0.01);
+    float n = hash(floor(vUv * uRes / px) + uSeed);
+    c += (n - 0.5) * uGrain * (0.30 + 0.70 * (1.0 - L));
+  }
+  if (uLeak > 0.001) {
+    vec2 p = vUv * vec2(uAspect, 1.0);
+    float m1 = smoothstep(1.05, 0.0, length(p - vec2(uAspect * 1.02, 0.08)));
+    float m2 = smoothstep(0.85, 0.0, length(p - vec2(-0.05, 0.85)));
+    vec3 leakCol = vec3(1.0, 0.45, 0.15) * m1 * 0.8 + vec3(0.95, 0.25, 0.2) * m2 * 0.55;
+    c = 1.0 - (1.0 - c) * (1.0 - leakCol * uLeak);
+  }
+  if (uDust > 0.001) {
+    float cell = hash(floor(vUv * uRes / 2.5) + 7.31);
+    float speck = step(0.9987, cell) * uDust;
+    c *= 1.0 - speck * 0.30;
+    float cell2 = hash(floor(vUv * uRes / 2.0) + 3.77);
+    c += step(0.9993, cell2) * uDust * 0.12;
+  }
+  if (uVignette > 0.001) {
+    float d = length((vUv - 0.5) * vec2(uAspect, 1.0) * 1.35);
+    c *= mix(1.0, smoothstep(1.25, 0.30, d), uVignette);
+  }
+  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+}`;
+</script>
+<script>
+'use strict';
+/* ================= GL plumbing ================= */
+let S = defaultSettings();
+let imgTex = null, imgW = 0, imgH = 0;
+let curvesTex = null, lutTex = null, lutSizeN = 0, maskTex = null;
+let useRadialMask = true;
+const progs = {};
+const fbos = {};
+let quadBuf = null;
+
+function compileProg(fragSrc) {
+  function sh(type, src) {
+    const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o);
+    if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(o));
+    return o;
+  }
+  const p = gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, VERT));
+  gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fragSrc));
+  gl.linkProgram(p);
+  return { prog: p, locs: {} };
+}
+function U(P, name) {
+  if (!(name in P.locs)) P.locs[name] = gl.getUniformLocation(P.prog, name);
+  return P.locs[name];
+}
+function makeFBO() {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  const fb = gl.createFramebuffer();
+  return { tex, fb, w: 0, h: 0 };
+}
+function sizeFBO(f, w, h) {
+  if (f.w === w && f.h === h) return;
+  gl.bindTexture(gl.TEXTURE_2D, f.tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  f.w = w; f.h = h;
+}
+function bindTarget(f, w, h) {
+  if (f) { sizeFBO(f, w, h); gl.bindFramebuffer(gl.FRAMEBUFFER, f.fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, f.tex, 0); }
+  else gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, w, h);
+}
+function drawQuad(P) {
+  gl.useProgram(P.prog);
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+  const loc = gl.getAttribLocation(P.prog, 'aPos');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+function initGL() {
+  if (!gl) return false;
+  progs.grade = compileProg(GRADE_FRAG);
+  progs.blur = compileProg(BLUR_FRAG);
+  progs.comp = compileProg(COMPOSITE_FRAG);
+  progs.finish = compileProg(FINISH_FRAG);
+  quadBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  ['grade', 'blur1', 'blur2', 'comp'].forEach(k => { fbos[k] = makeFBO(); });
+  curvesTex = gl.createTexture();
+  updateCurvesTexture();
+  return true;
+}
+function uploadSourceImage(img) {
+  if (!gl) return;
+  if (!imgTex) imgTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, imgTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  imgW = img.naturalWidth; imgH = img.naturalHeight;
+}
+function updateCurvesTexture() {
+  if (!gl) return;
+  const lut = buildCurvesLUT(S.curves);
+  const px = new Uint8Array(256 * 4);
+  for (let i = 0; i < 256; i++) { px[i * 4] = lut.r[i]; px[i * 4 + 1] = lut.g[i]; px[i * 4 + 2] = lut.b[i]; px[i * 4 + 3] = 255; }
+  gl.bindTexture(gl.TEXTURE_2D, curvesTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px);
+}
+function resampleLUT(lut, N2) {
+  const N = lut.size, out = new Float32Array(N2 * N2 * N2 * 3);
+  function sample(r, g, b) {
+    const x0 = Math.floor(r), y0 = Math.floor(g), z0 = Math.floor(b);
+    const x1 = Math.min(x0 + 1, N - 1), y1 = Math.min(y0 + 1, N - 1), z1 = Math.min(z0 + 1, N - 1);
+    const fx = r - x0, fy = g - y0, fz = b - z0;
+    const at = (xx, yy, zz, c) => lut.data[((zz * N + yy) * N + xx) * 3 + c];
+    const res = [0, 0, 0];
+    for (let c = 0; c < 3; c++) {
+      const v00 = at(x0, y0, z0, c) * (1 - fx) + at(x1, y0, z0, c) * fx;
+      const v10 = at(x0, y1, z0, c) * (1 - fx) + at(x1, y1, z0, c) * fx;
+      const v01 = at(x0, y0, z1, c) * (1 - fx) + at(x1, y0, z1, c) * fx;
+      const v11 = at(x0, y1, z1, c) * (1 - fx) + at(x1, y1, z1, c) * fx;
+      res[c] = (v00 * (1 - fy) + v10 * fy) * (1 - fz) + (v01 * (1 - fy) + v11 * fy) * fz;
+    }
+    return res;
+  }
+  for (let b = 0; b < N2; b++) for (let g = 0; g < N2; g++) for (let r = 0; r < N2; r++) {
+    const v = sample(r / (N2 - 1) * (N - 1), g / (N2 - 1) * (N - 1), b / (N2 - 1) * (N - 1));
+    const i = ((b * N2 + g) * N2 + r) * 3;
+    out[i] = v[0]; out[i + 1] = v[1]; out[i + 2] = v[2];
+  }
+  return { size: N2, data: out };
+}
+function setLUT(lutObj) {
+  if (!gl) return;
+  let lut = lutObj;
+  if (lut.size > 48) lut = resampleLUT(lut, 32);
+  const packed = packLUTTexture(lut);
+  if (!lutTex) lutTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, lutTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, packed.width, packed.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, packed.pixels);
+  lutSizeN = lut.size;
+}
+function clearLUT() { lutSizeN = 0; }
+function uploadMaskCanvas(cv) {
+  if (!gl) return;
+  if (!maskTex) maskTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, maskTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cv);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  useRadialMask = false;
+}
+function fillZoomFor(rotDeg, aspect) {
+  const a = Math.abs(rotDeg) * Math.PI / 180;
+  if (a < 0.0001) return 1;
+  const c = Math.cos(a), s = Math.sin(a);
+  return Math.min(aspect / (aspect * c + s), 1 / (aspect * s + c));
+}
+function setGradeUniforms(P, st, w, h) {
+  const aspect = w / h;
+  gl.uniform1i(U(P, 'uTex'), 0);
+  gl.uniform1f(U(P, 'uAspect'), aspect);
+  gl.uniform1f(U(P, 'uDistort'), st.distortion * 0.006);
+  gl.uniform1f(U(P, 'uPerspV'), st.perspV * 0.01);
+  gl.uniform1f(U(P, 'uPerspH'), st.perspH * 0.01);
+  gl.uniform1f(U(P, 'uRotate'), -st.rotate * Math.PI / 180);
+  gl.uniform1f(U(P, 'uZoom'), fillZoomFor(st.rotate, aspect));
+  gl.uniform1f(U(P, 'uExposure'), st.exposure);
+  gl.uniform1f(U(P, 'uBrightness'), st.brightness / 100);
+  gl.uniform1f(U(P, 'uContrast'), st.contrast / 100);
+  gl.uniform1f(U(P, 'uHighlights'), st.highlights / 100);
+  gl.uniform1f(U(P, 'uShadows'), st.shadows / 100);
+  gl.uniform1f(U(P, 'uWhites'), st.whites / 100);
+  gl.uniform1f(U(P, 'uBlacks'), st.blacks / 100);
+  gl.uniform1f(U(P, 'uFade'), st.fade / 100);
+  gl.uniform1f(U(P, 'uTemp'), st.temp / 100);
+  gl.uniform1f(U(P, 'uTint'), st.tint / 100);
+  gl.uniform1f(U(P, 'uVibrance'), st.vibrance / 100);
+  gl.uniform1f(U(P, 'uSaturation'), st.saturation / 100);
+  const order = ['red', 'orange', 'yellow', 'green', 'aqua', 'blue', 'purple', 'magenta'];
+  order.forEach((k, i) => {
+    const c = st.hsl[k];
+    gl.uniform3f(U(P, 'uHsl[' + i + ']'), c.h, c.s, c.l);
+  });
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, curvesTex);
+  gl.uniform1i(U(P, 'uCurves'), 1);
+  gl.activeTexture(gl.TEXTURE2);
+  gl.bindTexture(gl.TEXTURE_2D, lutTex);
+  gl.uniform1i(U(P, 'uLUT'), 2);
+  gl.uniform1f(U(P, 'uLutSize'), lutSizeN);
+  gl.uniform1f(U(P, 'uLutAmt'), st.lutIntensity / 100);
+  gl.uniform1f(U(P, 'uHasLUT'), lutSizeN > 0 ? 1 : 0);
+  gl.activeTexture(gl.TEXTURE0);
+}
+function renderPipeline(st, w, h, toCanvas) {
+  if (!gl || !imgTex) return;
+  // Pass 1: grade
+  bindTarget(fbos.grade, w, h);
+  gl.useProgram(progs.grade.prog);
+  setGradeUniforms(progs.grade, st, w, h);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, imgTex);
+  drawQuad(progs.grade);
+  let srcTex = fbos.grade.tex;
+  // Optional bokeh
+  if (st.bokeh > 0) {
+    const radius = st.bokeh / 100 * Math.max(w, h) * 0.012;
+    const passes = [[fbos.blur1, 1, 0], [fbos.blur2, 0, 1], [fbos.blur1, 1, 0], [fbos.blur2, 0, 1]];
+    let src = fbos.grade.tex;
+    for (const [fb, dx, dy] of passes) {
+      bindTarget(fb, w, h);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, src);
+      gl.useProgram(progs.blur.prog);
+      gl.uniform1i(U(progs.blur, 'uTex'), 0);
+      gl.uniform2f(U(progs.blur, 'uStep'), dx ? radius / w : 0, dy ? radius / h : 0);
+      drawQuad(progs.blur);
+      src = fb.tex;
+    }
+    bindTarget(fbos.comp, w, h);
+    gl.useProgram(progs.comp.prog);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fbos.grade.tex); gl.uniform1i(U(progs.comp, 'uSharp'), 0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, src); gl.uniform1i(U(progs.comp, 'uBlur'), 1);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, maskTex); gl.uniform1i(U(progs.comp, 'uMask'), 2);
+    gl.uniform1f(U(progs.comp, 'uRadial'), (useRadialMask || !maskTex) ? 1 : 0);
+    gl.uniform2f(U(progs.comp, 'uFocus'), st.focusX, 1 - st.focusY);
+    gl.uniform1f(U(progs.comp, 'uAspect'), w / h);
+    gl.activeTexture(gl.TEXTURE0);
+    drawQuad(progs.comp);
+    srcTex = fbos.comp.tex;
+  }
+  // Final: finish
+  if (toCanvas) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, w, h); }
+  else bindTarget(fbos.export || fbos.blur1, w, h);
+  gl.useProgram(progs.finish.prog);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, srcTex);
+  gl.uniform1i(U(progs.finish, 'uTex'), 0);
+  gl.uniform2f(U(progs.finish, 'uTexel'), 1 / w, 1 / h);
+  gl.uniform2f(U(progs.finish, 'uRes'), w, h);
+  gl.uniform1f(U(progs.finish, 'uSharpen'), st.sharpen / 100);
+  gl.uniform1f(U(progs.finish, 'uGrain'), st.grain / 100 * 0.55);
+  gl.uniform1f(U(progs.finish, 'uGrainSize'), st.grainSize);
+  gl.uniform1f(U(progs.finish, 'uVignette'), st.vignette / 100);
+  gl.uniform1f(U(progs.finish, 'uLeak'), st.leak / 100);
+  gl.uniform1f(U(progs.finish, 'uDust'), st.dust / 100);
+  gl.uniform1f(U(progs.finish, 'uSeed'), Math.random() * 10);
+  gl.uniform1f(U(progs.finish, 'uAspect'), w / h);
+  drawQuad(progs.finish);
+}
+</script>
+<script>
+'use strict';
+/* ================= App state + UI ================= */
+const $ = (id) => document.getElementById(id);
+const photos = [];
+let activeId = null;
+let activeTab = 'preset';
+let segState = 'idle', segPhotoId = null, segEngine = null;
+let rafPending = false;
+
+function toast(msg, ms) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), ms || 2600);
+}
+function activePhoto() { return photos.find(p => p.id === activeId) || null; }
+function scheduleRender() {
+  if (rafPending) return;
+  rafPending = true;
+  requestAnimationFrame(() => { rafPending = false; renderPreview(); });
+}
+function renderPreview() {
+  const ph = activePhoto();
+  if (!ph || !gl) return;
+  const maxDim = 1280;
+  const scale = Math.min(1, maxDim / Math.max(imgW, imgH));
+  const w = Math.max(2, Math.round(imgW * scale)), h = Math.max(2, Math.round(imgH * scale));
+  if (viewCanvas.width !== w) viewCanvas.width = w;
+  if (viewCanvas.height !== h) viewCanvas.height = h;
+  renderPipeline(S, w, h, true);
+}
+
+/* ---------- generic slider row ---------- */
+function sliderRow(parent, label, get, set, min, max, step, defVal, fmt) {
+  const row = document.createElement('div');
+  row.className = 'prow';
+  const lb = document.createElement('label'); lb.textContent = label;
+  const inp = document.createElement('input');
+  inp.type = 'range'; inp.min = min; inp.max = max; inp.step = step; inp.value = get();
+  const out = document.createElement('output');
+  const show = () => { out.textContent = fmt ? fmt(parseFloat(inp.value)) : inp.value; };
+  show();
+  inp.addEventListener('input', () => { set(parseFloat(inp.value)); show(); scheduleRender(); });
+  inp.addEventListener('dblclick', () => { inp.value = defVal; set(defVal); show(); scheduleRender(); });
+  row.append(lb, inp, out);
+  parent.appendChild(row);
+  return inp;
+}
+const F0 = (v) => String(Math.round(v));
+const FEV = (v) => (v > 0 ? '+' : '') + v.toFixed(2);
+
+/* ---------- tabs ---------- */
+const TABS = [
+  ['preset', '🎞 Preset'], ['light', '💡 Light'], ['color', '🎨 Color'], ['curves', '〰 Curves'],
+  ['hsl', '🌈 HSL'], ['effects', '✨ Effects'], ['geometry', '📐 Geometry'], ['portrait', '👤 Portrait']
+];
+function buildTabs() {
+  const bar = $('tabs');
+  bar.innerHTML = '';
+  for (const [id, label] of TABS) {
+    const b = document.createElement('button');
+    b.className = 'tab' + (id === activeTab ? ' active' : '');
+    b.textContent = label;
+    b.addEventListener('click', () => { activeTab = id; buildTabs(); buildPanel(); });
+    bar.appendChild(b);
+  }
+}
+
+/* ---------- panels ---------- */
+function buildPanel() {
+  const panel = $('panel');
+  panel.innerHTML = '';
+  if (activeTab === 'preset') panelPreset(panel);
+  else if (activeTab === 'light') {
+    sliderRow(panel, 'Exposure', () => S.exposure, v => S.exposure = v, -2, 2, 0.05, 0, FEV);
+    sliderRow(panel, 'Brightness', () => S.brightness, v => S.brightness = v, -100, 100, 1, 0, F0);
+    sliderRow(panel, 'Contrast', () => S.contrast, v => S.contrast = v, -100, 100, 1, 0, F0);
+    sliderRow(panel, 'Highlights', () => S.highlights, v => S.highlights = v, -100, 100, 1, 0, F0);
+    sliderRow(panel, 'Shadows', () => S.shadows, v => S.shadows = v, -100, 100, 1, 0, F0);
+    sliderRow(panel, 'Whites', () => S.whites, v => S.whites = v, -100, 100, 1, 0, F0);
+    sliderRow(panel, 'Blacks', () => S.blacks, v => S.blacks = v, -100, 100, 1, 0, F0);
+    sliderRow(panel, 'Fade', () => S.fade, v => S.fade = v, 0, 100, 1, 0, F0);
+    note(panel, 'Slider ကို နှစ်ချက် နှိပ်ရင် မူလ တန်ဖိုး ပြန် ရောက်တယ်။');
+  }
+  else if (activeTab === 'color') {
+    sliderRow(panel, 'Temperature', () => S.temp, v => S.temp = v, -100, 100, 1, 0, F0);
+    sliderRow(panel, 'Tint', () => S.tint, v => S.tint = v, -100, 100, 1, 0, F0);
+    sliderRow(panel, 'Vibrance', () => S.vibrance, v => S.vibrance = v, -100, 100, 1, 0, F0);
+    sliderRow(panel, 'Saturation', () => S.saturation, v => S.saturation = v, -100, 100, 1, 0, F0);
+  }
+  else if (activeTab === 'effects') {
+    sliderRow(panel, 'Grain', () => S.grain, v => S.grain = v, 0, 100, 1, 0, F0);
+    sliderRow(panel, 'Grain Size', () => S.grainSize, v => S.grainSize = v, 0, 100, 1, 50, F0);
+    sliderRow(panel, 'Vignette', () => S.vignette, v => S.vignette = v, 0, 100, 1, 0, F0);
+    sliderRow(panel, 'Sharpen', () => S.sharpen, v => S.sharpen = v, 0, 100, 1, 0, F0);
+    sliderRow(panel, 'Light Leak', () => S.leak, v => S.leak = v, 0, 100, 1, 0, F0);
+    sliderRow(panel, 'Dust', () => S.dust, v => S.dust = v, 0, 100, 1, 0, F0);
+    note(panel, 'Grain/Leak/Dust က film look ရဲ့ အနှစ် သာရတွေပါ — ပါးပါးပဲ ထည့်တာ ပိုလှတယ်။');
+  }
+  else if (activeTab === 'curves') panelCurves(panel);
+  else if (activeTab === 'hsl') panelHSL(panel);
+  else if (activeTab === 'geometry') panelGeometry(panel);
+  else if (activeTab === 'portrait') panelPortrait(panel);
+}
+function note(parent, text) {
+  const d = document.createElement('div');
+  d.className = 'note'; d.textContent = text;
+  parent.appendChild(d);
+  return d;
+}
+function panelPreset(panel) {
+  const grid = document.createElement('div');
+  grid.className = 'presetGrid';
+  for (const pr of FACTORY_PRESETS) {
+    const d = document.createElement('div');
+    d.className = 'preset' + (S._presetId === pr.id ? ' active' : '');
+    d.innerHTML = '';
+    d.append(document.createTextNode(pr.name));
+    const sm = document.createElement('small'); sm.textContent = pr.sub; d.appendChild(sm);
+    d.addEventListener('click', () => {
+      const keepLUT = { lutName: S.lutName, lutIntensity: S.lutIntensity };
+      const fresh = applyPatch(defaultSettings(), pr.patch);
+      fresh.lutName = keepLUT.lutName; fresh.lutIntensity = keepLUT.lutIntensity;
+      fresh._presetId = pr.id;
+      replaceSettings(fresh);
+      buildPanel();
+    });
+    grid.appendChild(d);
+  }
+  panel.appendChild(grid);
+  const rb = document.createElement('div'); rb.className = 'rowBtns';
+  const reset = document.createElement('button'); reset.className = 'chip'; reset.textContent = '↺ အကုန် ရှင်း (Reset)';
+  reset.addEventListener('click', () => { const fresh = defaultSettings(); fresh.lutName = S.lutName; fresh.lutIntensity = S.lutIntensity; replaceSettings(fresh); buildPanel(); });
+  rb.appendChild(reset);
+  panel.appendChild(rb);
+  const lutBox = document.createElement('div');
+  lutBox.innerHTML = '<div style="font-size:13px; font-weight:700; padding-top:8px">🎬 LUT <span style="color:#8b8b92; font-weight:400" id="lutNameTxt"></span></div>';
+  panel.appendChild(lutBox);
+  $('lutNameTxt').textContent = S.lutName ? '— ' + S.lutName : '(မရှိ)';
+  sliderRow(panel, 'LUT အား', () => S.lutIntensity, v => S.lutIntensity = v, 0, 100, 1, 80, F0);
+  const lb = document.createElement('div'); lb.className = 'rowBtns';
+  const bLoad = document.createElement('button'); bLoad.className = 'chip'; bLoad.textContent = 'LUT ဖိုင် ရွေးမယ် (.cube / Hald PNG)';
+  bLoad.addEventListener('click', () => $('fileLUT').click());
+  const bClear = document.createElement('button'); bClear.className = 'chip'; bClear.textContent = 'LUT ဖြုတ်မယ်';
+  bClear.addEventListener('click', () => { clearLUT(); S.lutName = ''; buildPanel(); scheduleRender(); });
+  const bHald = document.createElement('button'); bHald.className = 'chip'; bHald.textContent = '⬇ Hald identity ထုတ်မယ်';
+  bHald.addEventListener('click', downloadIdentityHald);
+  lb.append(bLoad, bClear, bHald);
+  panel.appendChild(lb);
+  note(panel, 'RNI preset သုံးချင်ရင် — (၁) Hald identity ပုံကို ထုတ်ယူ၊ (၂) Capture One / Lightroom မှာ အဲ့ပုံပေါ် RNI style တင်ပြီး PNG အဖြစ် export၊ (၃) ရလာတဲ့ ပုံကို ဒီမှာ LUT အဖြစ် ပြန် load လုပ်ရုံပဲ။ RNI package ထဲမှာ .cube ဖိုင် ပါရင်တော့ တိုက်ရိုက် load လို့ ရတယ်။');
+}
+function replaceSettings(fresh) {
+  const ph = activePhoto();
+  if (ph) ph.settings = fresh;
+  S = fresh;
+  updateCurvesTexture();
+  markEdited();
+  scheduleRender();
+}
+function markEdited() {
+  const ph = activePhoto();
+  if (ph) ph.edited = settingsDirty(ph.settings, defaultSettings());
+  renderStrip();
+}
+</script>
+<script>
+'use strict';
+/* ================= Curves / HSL / Geometry / Portrait panels ================= */
+let curveChannel = 'master';
+function panelCurves(panel) {
+  const chips = document.createElement('div'); chips.className = 'chips';
+  [['master', 'Master'], ['r', 'Red'], ['g', 'Green'], ['b', 'Blue']].forEach(([id, lb]) => {
+    const c = document.createElement('button');
+    c.className = 'chip' + (curveChannel === id ? ' active' : '');
+    c.textContent = lb;
+    c.addEventListener('click', () => { curveChannel = id; buildPanel(); });
+    chips.appendChild(c);
+  });
+  panel.appendChild(chips);
+  const wrap = document.createElement('div'); wrap.id = 'curveWrap';
+  const cv = document.createElement('canvas');
+  cv.id = 'curveCanvas'; cv.width = 264; cv.height = 264;
+  wrap.appendChild(cv);
+  panel.appendChild(wrap);
+  const rb = document.createElement('div'); rb.className = 'rowBtns';
+  const rst = document.createElement('button'); rst.className = 'chip'; rst.textContent = 'Curve ရှင်း';
+  rst.addEventListener('click', () => {
+    S.curves[curveChannel] = curveChannel === 'master' ? [[0, 0], [0.25, 0.25], [0.5, 0.5], [0.75, 0.75], [1, 1]] : [[0, 0], [1, 1]];
+    drawCurveEditor(cv); updateCurvesTexture(); markEdited(); scheduleRender();
+  });
+  rb.appendChild(rst);
+  panel.appendChild(rb);
+  note(panel, 'အမှတ်ကို ဆွဲ ရွှေ့ပါ — ကွက်လပ်မှာ ထိရင် အမှတ် အသစ် ထပ်ထည့်တယ်။');
+  drawCurveEditor(cv);
+  initCurveDrag(cv);
+}
+function drawCurveEditor(cv) {
+  const ctx = cv.getContext('2d');
+  if (!ctx) return;
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#17171a'; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = '#2c2c31'; ctx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) {
+    ctx.beginPath(); ctx.moveTo(W * i / 4, 0); ctx.lineTo(W * i / 4, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, H * i / 4); ctx.lineTo(W, H * i / 4); ctx.stroke();
+  }
+  ctx.strokeStyle = '#3f3f46';
+  ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(W, 0); ctx.stroke();
+  const pts = S.curves[curveChannel];
+  ctx.strokeStyle = curveChannel === 'master' ? '#e8e8ea' : ({ r: '#ff7a7a', g: '#8aff9a', b: '#7ab8ff' })[curveChannel];
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let x = 0; x <= W; x += 4) {
+    const y = curveEval(pts, x / W);
+    const py = H - y * H;
+    if (x === 0) ctx.moveTo(x, py); else ctx.lineTo(x, py);
+  }
+  ctx.stroke();
+  ctx.fillStyle = '#d4a24a';
+  for (const p of pts) {
+    ctx.beginPath(); ctx.arc(p[0] * W, H - p[1] * H, 6, 0, Math.PI * 2); ctx.fill();
+  }
+}
+function initCurveDrag(cv) {
+  let dragIdx = -1;
+  const pos = (e) => {
+    const r = cv.getBoundingClientRect();
+    return { x: clamp((e.clientX - r.left) / r.width, 0, 1), y: clamp(1 - (e.clientY - r.top) / r.height, 0, 1) };
+  };
+  cv.addEventListener('pointerdown', (e) => {
+    const p = pos(e);
+    const pts = S.curves[curveChannel];
+    dragIdx = -1;
+    let best = 0.09;
+    pts.forEach((pt, i) => { const d = Math.hypot(pt[0] - p.x, pt[1] - p.y); if (d < best) { best = d; dragIdx = i; } });
+    if (dragIdx < 0 && pts.length < 8) {
+      pts.push([p.x, p.y]);
+      pts.sort((a, b) => a[0] - b[0]);
+      dragIdx = pts.findIndex(pt => pt[0] === p.x && pt[1] === p.y);
+    }
+    cv.setPointerCapture(e.pointerId);
+    drawCurveEditor(cv);
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (dragIdx < 0) return;
+    const p = pos(e);
+    const pts = S.curves[curveChannel];
+    const pt = pts[dragIdx];
+    if (dragIdx === 0) pt[0] = 0;
+    else if (dragIdx === pts.length - 1) pt[0] = 1;
+    else pt[0] = clamp(p.x, pts[dragIdx - 1][0] + 0.03, pts[dragIdx + 1][0] - 0.03);
+    pt[1] = p.y;
+    drawCurveEditor(cv);
+    updateCurvesTexture();
+    scheduleRender();
+  });
+  cv.addEventListener('pointerup', () => { dragIdx = -1; markEdited(); });
+}
+let hslChannel = 'red';
+const HSL_META = [
+  ['red', '🔴 Red'], ['orange', '🟠 Orange'], ['yellow', '🟡 Yellow'], ['green', '🟢 Green'],
+  ['aqua', '🔵 Aqua'], ['blue', '🟦 Blue'], ['purple', '🟣 Purple'], ['magenta', '🟪 Magenta']
+];
+function panelHSL(panel) {
+  const chips = document.createElement('div'); chips.className = 'chips';
+  HSL_META.forEach(([id, lb]) => {
+    const c = document.createElement('button');
+    c.className = 'chip' + (hslChannel === id ? ' active' : '');
+    c.textContent = lb;
+    c.addEventListener('click', () => { hslChannel = id; buildPanel(); });
+    chips.appendChild(c);
+  });
+  panel.appendChild(chips);
+  const ch = () => S.hsl[hslChannel];
+  sliderRow(panel, 'Hue', () => ch().h, v => ch().h = v, -50, 50, 1, 0, F0);
+  sliderRow(panel, 'Saturation', () => ch().s, v => ch().s = v, -100, 100, 1, 0, F0);
+  sliderRow(panel, 'Luminance', () => ch().l, v => ch().l = v, -100, 100, 1, 0, F0);
+}
+const FOCAL_PRESETS = [[16, -38], [24, -26], [35, -14], [50, -6], [85, 4]];
+function panelGeometry(panel) {
+  sliderRow(panel, 'Distortion', () => S.distortion, v => S.distortion = v, -100, 100, 1, 0, F0);
+  const fc = document.createElement('div'); fc.className = 'chips';
+  const fLabel = document.createElement('span');
+  fLabel.style.cssText = 'font-size:12px;color:#8b8b92;align-self:center';
+  fLabel.textContent = 'Lens အလိုက် အမြန် ချိန်:';
+  fc.appendChild(fLabel);
+  for (const [mm, val] of FOCAL_PRESETS) {
+    const b = document.createElement('button');
+    b.className = 'chip' + (S.distortion === val ? ' active' : '');
+    b.textContent = mm + 'mm';
+    b.addEventListener('click', () => { S.distortion = val; buildPanel(); markEdited(); scheduleRender(); });
+    fc.appendChild(b);
+  }
+  panel.appendChild(fc);
+  note(panel, 'Focal length ခလုတ်က စမှတ် တန်ဖိုးပဲ ပေးတာပါ — မျဉ်းဖြောင့်တွေ ကြည့်ပြီး Distortion slider နဲ့ အသေး ညှိပါ။');
+  sliderRow(panel, 'Perspective ↕', () => S.perspV, v => S.perspV = v, -100, 100, 1, 0, F0);
+  sliderRow(panel, 'Perspective ↔', () => S.perspH, v => S.perspH = v, -100, 100, 1, 0, F0);
+  sliderRow(panel, 'Rotate', () => S.rotate, v => S.rotate = v, -45, 45, 0.1, 0, (v) => v.toFixed(1) + '°');
+  note(panel, 'မှတ်ချက်: Perspective distortion အစစ် (မျက်နှာ ပုံ ပျက်တာ) က ကင်မရာ အကွာအဝေး ကြောင့် ဖြစ်တာမို့ ပြင်မရပါ — ဒီမှာ ပြင်တာက keystone (အဆောက်အအုံ မျဉ်းတွေ စောင်းတာ) နဲ့ lens barrel distortion ပါ။');
+}
+function panelPortrait(panel) {
+  sliderRow(panel, 'Bokeh အား', () => S.bokeh, v => { S.bokeh = v; if (v > 0) ensureSegmentation(); }, 0, 100, 1, 0, F0);
+  const st = note(panel, '');
+  const upd = () => {
+    st.innerHTML = '';
+    const b = document.createElement('b'); b.textContent = 'အခြေအနေ: '; st.appendChild(b);
+    st.appendChild(document.createTextNode(
+      segState === 'ready' && segPhotoId === activeId ? 'AI subject ခွဲခြားပြီး — လူ/အဓိက အရာကို ထက်ထက်, နောက်ခံ ဝါးထားတယ်။'
+      : segState === 'loading' ? 'AI model တင်နေဆဲ… ပြီးရင် အလိုအလျောက် ပြောင်းသွားမယ်။'
+      : segState === 'failed' ? 'AI မရလို့ radial နည်း သုံးနေတယ် — preview ပုံကို ထိပြီး focus အမှတ် ရွှေ့နိုင်တယ်။'
+      : 'Bokeh ဖွင့်ရင် AI subject ခွဲခြားမှု အရင် စမ်းမယ်၊ မရရင် radial နည်း (focus အမှတ်) သုံးမယ်။'));
+  };
+  upd();
+  panel._updSeg = upd;
+  const rb = document.createElement('div'); rb.className = 'rowBtns';
+  const btn = document.createElement('button'); btn.className = 'chip'; btn.textContent = '👤 Subject ပြန် ခွဲခြားမယ်';
+  btn.addEventListener('click', () => { segState = 'idle'; ensureSegmentation(); });
+  rb.appendChild(btn);
+  panel.appendChild(rb);
+  note(panel, 'Bokeh က အဓိက feature မဟုတ်ဘဲ အနီးစပ်ဆုံး အဆင့် ထားထားတာပါ — portrait တွေမှာ နောက်ခံ ဝါးရုံပါ။');
+}
+
+/* ================= Photos / strip ================= */
+function renderStrip() {
+  const strip = $('strip');
+  strip.innerHTML = '';
+  for (const ph of photos) {
+    const d = document.createElement('div');
+    d.className = 'thumb' + (ph.id === activeId ? ' active' : '') + (ph.edited ? ' edited' : '');
+    const im = document.createElement('img');
+    im.src = ph.url; im.alt = ph.name;
+    const bd = document.createElement('span'); bd.className = 'badge'; bd.textContent = '✎';
+    d.append(im, bd);
+    d.addEventListener('click', () => activatePhoto(ph.id));
+    strip.appendChild(d);
+  }
+}
+function activatePhoto(id) {
+  const ph = photos.find(p => p.id === id);
+  if (!ph) return;
+  activeId = id;
+  S = ph.settings;
+  uploadSourceImage(ph.img);
+  segState = segPhotoId === id ? segState : 'idle';
+  if (segPhotoId !== id) { useRadialMask = true; }
+  $('emptyMsg').style.display = 'none';
+  viewCanvas.style.display = 'block';
+  updateCurvesTexture();
+  buildPanel();
+  renderStrip();
+  scheduleRender();
+}
+function addPhotoFiles(files) {
+  let firstNew = null;
+  for (const f of files) {
+    if (!f.type.startsWith('image/')) continue;
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.onload = () => {
+      const ph = { id: 'p' + Date.now() + Math.random().toString(36).slice(2, 7), name: f.name, url, img, settings: defaultSettings(), edited: false };
+      photos.push(ph);
+      renderStrip();
+      if (!activeId) activatePhoto(ph.id);
+      else if (firstNew === ph.id) activatePhoto(ph.id);
+    };
+    img.src = url;
+    if (!firstNew) firstNew = 'pending';
+  }
+}
+$('btnOpen').addEventListener('click', () => $('fileOpen').click());
+$('fileOpen').addEventListener('change', (e) => { addPhotoFiles([...e.target.files]); e.target.value = ''; });
+const stage = $('stage');
+stage.addEventListener('dragover', (e) => { e.preventDefault(); });
+stage.addEventListener('drop', (e) => { e.preventDefault(); addPhotoFiles([...e.dataTransfer.files]); });
+
+/* compare (hold) + tap focus on preview */
+let holdTimer = null, comparing = false;
+viewCanvas.addEventListener('pointerdown', (e) => {
+  holdTimer = setTimeout(() => {
+    comparing = true;
+    const ph = activePhoto(); if (!ph) return;
+    const saved = lutSizeN; lutSizeN = 0;
+    const w = viewCanvas.width, h = viewCanvas.height;
+    renderPipeline(defaultSettings(), w, h, true);
+    lutSizeN = saved;
+  }, 380);
+  viewCanvas._downAt = Date.now();
+  viewCanvas._downPos = { x: e.clientX, y: e.clientY };
+});
+viewCanvas.addEventListener('pointerup', (e) => {
+  clearTimeout(holdTimer);
+  if (comparing) { comparing = false; scheduleRender(); return; }
+  if (Date.now() - (viewCanvas._downAt || 0) < 300 && activeTab === 'portrait' && useRadialMask) {
+    const r = viewCanvas.getBoundingClientRect();
+    S.focusX = clamp((e.clientX - r.left) / r.width, 0, 1);
+    S.focusY = clamp((e.clientY - r.top) / r.height, 0, 1);
+    scheduleRender();
+    toast('Focus အမှတ် ရွှေ့ပြီး');
+  }
+});
+viewCanvas.addEventListener('pointerleave', () => { clearTimeout(holdTimer); if (comparing) { comparing = false; scheduleRender(); } });
+
+/* ================= LUT files ================= */
+$('fileLUT').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  try {
+    if (/\.cube$/i.test(f.name)) {
+      const lut = parseCUBE(await f.text());
+      setLUT(lut);
+      S.lutName = lut.title || f.name.replace(/\.cube$/i, '');
+      toast('LUT တင်ပြီး — ' + S.lutName + ' (' + lut.size + '³)');
+    } else {
+      const url = URL.createObjectURL(f);
+      const img = new Image();
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+      if (img.naturalWidth !== img.naturalHeight) throw new Error('Hald ပုံက စတုရန်းဖြစ်ရမယ်');
+      const cv = document.createElement('canvas');
+      cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+      const ctx = cv.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const data = ctx.getImageData(0, 0, cv.width, cv.height).data;
+      const lut = haldToLUT(data, cv.width);
+      setLUT(lut);
+      S.lutName = f.name.replace(/\.png$/i, '');
+      toast('Hald LUT တင်ပြီး (' + lut.size + '³)');
+      URL.revokeObjectURL(url);
+    }
+    buildPanel();
+    scheduleRender();
+  } catch (err) {
+    toast('LUT မရပါ — ' + err.message, 3600);
+  }
+});
+function downloadIdentityHald() {
+  const { side, pixels } = identityHaldPixels(64);
+  const cv = document.createElement('canvas');
+  cv.width = side; cv.height = side;
+  const ctx = cv.getContext('2d');
+  const im = ctx.createImageData(side, side);
+  im.data.set(pixels);
+  ctx.putImageData(im, 0, 0);
+  cv.toBlob((b) => downloadBlob(b, 'hald-identity-512.png'), 'image/png');
+  toast('Identity Hald ထုတ်ပြီး — Capture One/Lightroom မှာ RNI တင်ပြီး PNG ပြန် export ပါ');
+}
+function downloadBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/* ================= Export ================= */
+function renderToPixels(st, w, h) {
+  if (!fbos.export) fbos.export = makeFBO();
+  renderPipeline(st, w, h, false);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbos.export.fb);
+  const px = new Uint8Array(w * h * 4);
+  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const ctx = cv.getContext('2d');
+  const im = ctx.createImageData(w, h);
+  const rowLen = w * 4;
+  for (let y = 0; y < h; y++) {
+    im.data.set(px.subarray((h - 1 - y) * rowLen, (h - y) * rowLen), y * rowLen);
+  }
+  ctx.putImageData(im, 0, 0);
+  return cv;
+}
+function exportPhotoBlob(ph) {
+  return new Promise((resolve, reject) => {
+    const cur = activePhoto();
+    const needSwitch = !cur || cur.id !== ph.id;
+    if (needSwitch) { uploadSourceImage(ph.img); }
+    const cv = renderToPixels(ph.settings, ph.img.naturalWidth, ph.img.naturalHeight);
+    if (needSwitch && cur) uploadSourceImage(cur.img);
+    cv.toBlob((b) => b ? resolve(b) : reject(new Error('export မရပါ')), 'image/jpeg', 0.92);
+  });
+}
+$('btnExport').addEventListener('click', async () => {
+  const ph = activePhoto();
+  if (!ph) { toast('ဓာတ်ပုံ အရင် ဖွင့်ပါ'); return; }
+  toast('Export လုပ်နေတယ်…');
+  try {
+    const blob = await exportPhotoBlob(ph);
+    downloadBlob(blob, ph.name.replace(/\.[^.]+$/, '') + '-filmlab.jpg');
+    toast('Export ပြီးပြီ');
+  } catch (err) { toast(err.message, 3600); }
+  scheduleRender();
+});
+let jszipPromise = null;
+function loadJSZip() {
+  if (window.JSZip) return Promise.resolve(window.JSZip);
+  if (!jszipPromise) {
+    jszipPromise = new Promise((res, rej) => {
+      const sc = document.createElement('script');
+      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+      sc.onload = () => res(window.JSZip);
+      sc.onerror = rej;
+      document.head.appendChild(sc);
+    });
+  }
+  return jszipPromise;
+}
+$('btnBatch').addEventListener('click', async () => {
+  const ph = activePhoto();
+  if (!ph) { toast('ဓာတ်ပုံ အရင် ဖွင့်ပါ'); return; }
+  if (photos.length < 2) { toast('ပုံ တစ်ပုံထက် ပို ဖွင့်ထားမှ အစုလိုက် ရမယ်'); return; }
+  toast('အစုလိုက် ပြင်နေတယ် — လက်ရှိ ပုံရဲ့ setting ကို အားလုံးမှာ သုံးမယ်');
+  try {
+    const JSZip = await loadJSZip();
+    const zip = new JSZip();
+    for (const p of photos) {
+      const st = deepClone(ph.settings);
+      st.focusX = p.settings.focusX; st.focusY = p.settings.focusY;
+      const blob = await exportPhotoBlob({ ...p, settings: st });
+      zip.file(p.name.replace(/\.[^.]+$/, '') + '-filmlab.jpg', blob);
+    }
+    const out = await zip.generateAsync({ type: 'blob' });
+    downloadBlob(out, 'filmlab-batch.zip');
+    toast('Batch ပြီးပြီ — ZIP ထုတ်ပေးလိုက်ပြီ');
+  } catch (err) {
+    toast('ZIP မရလို့ တစ်ပုံချင်း ထုတ်ပေးမယ်', 3200);
+    for (const p of photos) {
+      const blob = await exportPhotoBlob({ ...p, settings: deepClone(ph.settings) });
+      downloadBlob(blob, p.name.replace(/\.[^.]+$/, '') + '-filmlab.jpg');
+      await new Promise(r => setTimeout(r, 450));
+    }
+  }
+  if (activePhoto()) { uploadSourceImage(activePhoto().img); }
+  scheduleRender();
+});
+
+/* ================= Recipes ================= */
+const RECIPE_KEY = 'filmlab_recipes_v1';
+function loadRecipes() {
+  try { return JSON.parse(localStorage.getItem(RECIPE_KEY) || '[]'); } catch (e) { return []; }
+}
+function saveRecipes(list) { localStorage.setItem(RECIPE_KEY, JSON.stringify(list)); }
+function renderRecipeList() {
+  const box = $('recipeList');
+  box.innerHTML = '';
+  const list = loadRecipes();
+  if (!list.length) { box.innerHTML = '<div class="note">သိမ်းထားတဲ့ recipe မရှိသေးပါ</div>'; return; }
+  list.forEach((r, i) => {
+    const row = document.createElement('div');
+    row.className = 'recipeItem';
+    const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = r.name;
+    const ap = document.createElement('button'); ap.className = 'mini'; ap.textContent = 'သုံးမယ်';
+    ap.addEventListener('click', () => {
+      const fresh = parseRecipe(JSON.stringify(r)).settings;
+      fresh.lutName = S.lutName; fresh.lutIntensity = S.lutIntensity;
+      replaceSettings(fresh);
+      $('recipeDlg').close();
+      toast('Recipe သုံးပြီး — ' + r.name);
+    });
+    const del = document.createElement('button'); del.className = 'mini danger'; del.textContent = 'ဖျက်';
+    del.addEventListener('click', () => { const l = loadRecipes(); l.splice(i, 1); saveRecipes(l); renderRecipeList(); });
+    row.append(nm, ap, del);
+    box.appendChild(row);
+  });
+}
+$('btnRecipe').addEventListener('click', () => { renderRecipeList(); $('recipeDlg').showModal(); });
+$('btnCloseRecipe').addEventListener('click', () => $('recipeDlg').close());
+$('btnSaveRecipe').addEventListener('click', () => {
+  const name = $('recipeName').value.trim() || ('Recipe ' + (loadRecipes().length + 1));
+  const list = loadRecipes();
+  const clean = deepClone(S); delete clean._presetId;
+  list.push({ app: 'FilmLab', version: 1, name, settings: clean });
+  saveRecipes(list);
+  $('recipeName').value = '';
+  renderRecipeList();
+  toast('Recipe သိမ်းပြီး — ' + name);
+});
+$('btnExportRecipe').addEventListener('click', () => {
+  const name = $('recipeName').value.trim() || 'My Recipe';
+  const clean = deepClone(S); delete clean._presetId;
+  downloadBlob(new Blob([serializeRecipe(name, clean)], { type: 'application/json' }), name.replace(/\s+/g, '-').toLowerCase() + '.filmlab-recipe.json');
+});
+$('btnImportRecipe').addEventListener('click', () => $('fileRecipe').click());
+$('fileRecipe').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  try {
+    const { name, settings } = parseRecipe(await f.text());
+    const list = loadRecipes();
+    list.push({ app: 'FilmLab', version: 1, name, settings });
+    saveRecipes(list);
+    renderRecipeList();
+    toast('Recipe သွင်းပြီး — ' + name);
+  } catch (err) { toast('Recipe ဖိုင် မရပါ — ' + err.message, 3400); }
+});
+
+/* ================= Segmentation (MediaPipe, lazy) ================= */
+function loadScriptOnce(src) {
+  return new Promise((res, rej) => {
+    if (document.querySelector('script[src="' + src + '"]')) return res();
+    const sc = document.createElement('script');
+    sc.src = src; sc.onload = res; sc.onerror = rej;
+    document.head.appendChild(sc);
+  });
+}
+async function ensureSegmentation() {
+  const ph = activePhoto();
+  if (!ph || segState === 'loading') return;
+  if (segState === 'ready' && segPhotoId === ph.id) return;
+  segState = 'loading';
+  const panel = $('panel');
+  if (panel._updSeg) panel._updSeg();
+  try {
+    await loadScriptOnce('https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js');
+    if (!segEngine) {
+      segEngine = new window.SelfieSegmentation({ locateFile: (f) => 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/' + f });
+      segEngine.setOptions({ modelSelection: 1 });
+      segEngine.onResults((results) => {
+        const cur = activePhoto();
+        if (!cur) return;
+        const mk = document.createElement('canvas');
+        mk.width = cur.img.naturalWidth; mk.height = cur.img.naturalHeight;
+        const mctx = mk.getContext('2d');
+        mctx.drawImage(results.segmentationMask, 0, 0, mk.width, mk.height);
+        // slight mask blur for softer edges: redraw scaled down/up
+        const small = document.createElement('canvas');
+        small.width = Math.max(2, mk.width >> 3); small.height = Math.max(2, mk.height >> 3);
+        small.getContext('2d').drawImage(mk, 0, 0, small.width, small.height);
+        mctx.imageSmoothingEnabled = true;
+        mctx.clearRect(0, 0, mk.width, mk.height);
+        mctx.drawImage(small, 0, 0, mk.width, mk.height);
+        uploadMaskCanvas(mk);
+        segState = 'ready';
+        segPhotoId = cur.id;
+        if ($('panel')._updSeg) $('panel')._updSeg();
+        scheduleRender();
+      });
+    }
+    await segEngine.send({ image: ph.img });
+  } catch (err) {
+    segState = 'failed';
+    useRadialMask = true;
+    if ($('panel')._updSeg) $('panel')._updSeg();
+    scheduleRender();
+  }
+}
+
+/* ================= Init ================= */
+const glOK = initGL();
+buildTabs();
+buildPanel();
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
