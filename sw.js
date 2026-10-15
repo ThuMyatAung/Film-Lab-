@@ -1,4 +1,4 @@
-const CACHE = 'filmlab-v3';
+const CACHE = 'filmlab-v31';
 const CORE = ['index.html', 'manifest.webmanifest', 'icon.svg'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)).then(() => self.skipWaiting()));
