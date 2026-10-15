@@ -32,7 +32,11 @@
   #stage { display: flex; align-items: center; justify-content: center; padding: 10px 12px; min-height: 200px; overflow: hidden; position: sticky; top: 130px; z-index: 10; background: #101012; }
   #stageInner { position: relative; line-height: 0; touch-action: none; }
   #view { max-width: 100%; max-height: 34vh; border-radius: 6px; box-shadow: 0 6px 30px rgba(0,0,0,.5); touch-action: none; background: #18181b; }
-  #cropOverlay, #healOverlay { position: absolute; inset: 0; display: none; line-height: normal; }
+  #cropOverlay, #healOverlay { position: absolute; inset: 0; display: none; line-height: normal; touch-action: none; }
+  #focusExit { display: none; position: fixed; right: 14px; bottom: 18px; z-index: 60; background: rgba(24,24,28,.94); color: #ffd98a; border: 1px solid #d4a24a; border-radius: 999px; padding: 11px 18px; font-size: 13.5px; cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
+  body.focusView #tabs, body.focusView #panel, body.focusView #strip, body.focusView #glwarn { display: none !important; }
+  body.focusView #stage { position: static; min-height: 0; }
+  body.focusView #view { max-height: 86vh; }
   .cropRect { position: absolute; border: 1.5px solid #ffd98a; box-shadow: 0 0 0 9999px rgba(0,0,0,.55); cursor: move; }
   .cropRect .thirds { position: absolute; inset: 0; pointer-events: none; opacity: .55;
     background:
@@ -95,7 +99,7 @@
 <body>
 <div id="app">
 <div id="topbar">
-  <div class="logo">Film<span>Lab</span> <small style="color:#8b8b92; font-size:11px; font-weight:400">v3.1</small></div>
+  <div class="logo">Film<span>Lab</span> <small style="color:#8b8b92; font-size:11px; font-weight:400">v3.2</small></div>
   <button class="tbtn" id="btnOpen">📂 ဖွင့်မယ်</button>
   <button class="tbtn" id="btnRecipe">💾 Recipe</button>
   <button class="tbtn" id="btnBatch">⬇ အစုလိုက်</button>
@@ -114,6 +118,7 @@
 <div id="tabs"></div>
 <div id="panel"></div>
 </div><!-- /#app -->
+<button id="focusExit">✕ ပြန်ထွက်</button>
 <div id="toast"></div>
 
 <dialog id="recipeDlg">
@@ -1074,27 +1079,41 @@ function recipeStepper(panel) {
   const row = document.createElement('div');
   row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:8px 0 2px';
   const prev = document.createElement('button');
-  prev.className = 'chip'; prev.textContent = '◀'; prev.style.fontSize = '15px'; prev.style.padding = '8px 16px';
+  prev.className = 'chip'; prev.textContent = '◀'; prev.style.cssText = 'font-size:18px; padding:12px 22px; flex:0 0 auto';
   const next = document.createElement('button');
-  next.className = 'chip'; next.textContent = '▶'; next.style.fontSize = '15px'; next.style.padding = '8px 16px';
+  next.className = 'chip'; next.textContent = '▶'; next.style.cssText = 'font-size:18px; padding:12px 22px; flex:0 0 auto';
   const nm = document.createElement('div');
   nm.id = 'stepperName';
   nm.style.cssText = 'flex:1; text-align:center; font-size:13px; color:#ffd98a; line-height:1.5';
   const showName = () => {
     nm.textContent = recipeIdx >= 0 && list[recipeIdx]
       ? (recipeIdx + 1) + ' / ' + list.length + ' — ' + list[recipeIdx].name
-      : '◀ ▶ နှိပ်ပြီး တစ်ခုချင်း လှည့်ကြည့်ပါ';
+      : '◀ ▶ နှိပ် (သို့) ဆွဲပြီး တစ်ခုချင်း လှည့်ကြည့်ပါ';
   };
   const applyIdx = (i) => {
-    recipeIdx = ((i % list.length) + list.length) % list.length;
-    const fresh = parseRecipe(JSON.stringify(list[recipeIdx])).settings;
-    fresh.lutName = S.lutName; fresh.lutIntensity = S.lutIntensity;
-    fresh.crop = deepClone(S.crop); fresh.heals = deepClone(S.heals); fresh.healSize = S.healSize;
-    replaceSettings(fresh);
-    showName();
+    try {
+      const fresh2 = loadRecipes();
+      if (!fresh2.length) { toast('Recipe မရှိသေးပါ'); return; }
+      recipeIdx = ((i % fresh2.length) + fresh2.length) % fresh2.length;
+      const rec = fresh2[recipeIdx];
+      const fresh = parseRecipe(JSON.stringify(rec)).settings;
+      fresh.lutName = S.lutName; fresh.lutIntensity = S.lutIntensity;
+      fresh.crop = deepClone(S.crop); fresh.heals = deepClone(S.heals); fresh.healSize = S.healSize;
+      replaceSettings(fresh);
+      nm.textContent = (recipeIdx + 1) + ' / ' + fresh2.length + ' — ' + rec.name;
+      toast('Recipe: ' + rec.name, 1100);
+    } catch (err) { toast('Recipe မရပါ — ' + err.message, 3400); }
   };
-  prev.addEventListener('click', () => applyIdx(recipeIdx < 0 ? list.length - 1 : recipeIdx - 1));
+  prev.addEventListener('click', () => applyIdx(recipeIdx < 0 ? loadRecipes().length - 1 : recipeIdx - 1));
   next.addEventListener('click', () => applyIdx(recipeIdx < 0 ? 0 : recipeIdx + 1));
+  let swipeX = null;
+  row.addEventListener('pointerdown', (e) => { swipeX = e.clientX; });
+  row.addEventListener('pointerup', (e) => {
+    if (swipeX === null) return;
+    const dx = e.clientX - swipeX;
+    swipeX = null;
+    if (Math.abs(dx) > 42) applyIdx(recipeIdx + (dx < 0 ? 1 : -1));
+  });
   showName();
   row.append(prev, nm, next);
   panel.appendChild(row);
@@ -1597,6 +1616,15 @@ viewCanvas.addEventListener('dblclick', (e) => {
   if (viewT.z > 1) resetViewZoom();
   else setViewZoom(2.5, e.clientX, e.clientY);
 });
+
+/* ---------- focus view: photo only (tap the photo to enter/leave) ---------- */
+let focusView = false, focusTapTimer = null;
+function toggleFocusView(force) {
+  focusView = force !== undefined ? force : !focusView;
+  document.body.classList.toggle('focusView', focusView);
+  $('focusExit').style.display = focusView ? 'block' : 'none';
+}
+$('focusExit').addEventListener('click', () => toggleFocusView(false));
 </script>
 <script>
 'use strict';
@@ -1785,6 +1813,7 @@ function activatePhoto(id) {
   $('emptyMsg').style.display = 'none';
   viewCanvas.style.display = 'block';
   resetViewZoom();
+  if (focusView) toggleFocusView(false);
   updateCurvesTexture();
   buildPanel();
   renderStrip();
@@ -1832,6 +1861,11 @@ viewCanvas.addEventListener('pointerup', (e) => {
   if (comparing) { comparing = false; scheduleRender(); return; }
   const dp = viewCanvas._downPos;
   const tapDist = dp ? Math.abs(e.clientX - dp.x) + Math.abs(e.clientY - dp.y) : 99;
+  const quickTap = Date.now() - (viewCanvas._downAt || 0) < 300 && tapDist < 10;
+  if (quickTap && activeTab !== 'portrait' && activeTab !== 'crop' && activeTab !== 'heal') {
+    if (focusTapTimer) { clearTimeout(focusTapTimer); focusTapTimer = null; }
+    else focusTapTimer = setTimeout(() => { focusTapTimer = null; toggleFocusView(); }, 280);
+  }
   if (Date.now() - (viewCanvas._downAt || 0) < 300 && tapDist < 10 && activeTab === 'portrait' && useRadialMask) {
     const r = viewCanvas.getBoundingClientRect();
     S.focusX = clamp((e.clientX - r.left) / r.width, 0, 1);
