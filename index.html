@@ -10,7 +10,13 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; padding: 0; background: #101012; color: #e8e8ea; font-family: -apple-system, "Helvetica Neue", "Noto Sans Myanmar", sans-serif; }
   button { font-family: inherit; }
-  #topbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #26262a; position: sticky; top: 0; background: #101012; z-index: 20; }
+  #app { display: flex; flex-direction: column; }
+  #topbar { order: 0; display: flex; align-items: center; gap: 8px; height: 50px; padding: 0 12px; border-bottom: 1px solid #26262a; position: sticky; top: 0; background: #101012; z-index: 20; }
+  #glwarn { order: 1; }
+  #tabs { order: 2; }
+  #strip { order: 3; }
+  #stage { order: 4; }
+  #panel { order: 5; }
   #topbar .logo { font-weight: 700; letter-spacing: .5px; font-size: 15px; margin-right: auto; }
   #topbar .logo span { color: #d4a24a; }
   .tbtn { background: #1d1d20; color: #e8e8ea; border: 1px solid #333338; border-radius: 9px; padding: 7px 11px; font-size: 12.5px; cursor: pointer; }
@@ -23,9 +29,9 @@
   .thumb.active { border-color: #d4a24a; }
   .thumb .badge { position: absolute; right: 2px; bottom: 2px; background: rgba(0,0,0,.65); color: #ffd98a; font-size: 9px; padding: 1px 4px; border-radius: 4px; display: none; }
   .thumb.edited .badge { display: block; }
-  #stage { display: flex; align-items: center; justify-content: center; padding: 12px; min-height: 200px; overflow: hidden; }
+  #stage { display: flex; align-items: center; justify-content: center; padding: 10px 12px; min-height: 200px; overflow: hidden; position: sticky; top: 96px; z-index: 10; background: #101012; }
   #stageInner { position: relative; line-height: 0; touch-action: none; }
-  #view { max-width: 100%; max-height: 52vh; border-radius: 6px; box-shadow: 0 6px 30px rgba(0,0,0,.5); touch-action: none; background: #18181b; }
+  #view { max-width: 100%; max-height: 40vh; border-radius: 6px; box-shadow: 0 6px 30px rgba(0,0,0,.5); touch-action: none; background: #18181b; }
   #cropOverlay, #healOverlay { position: absolute; inset: 0; display: none; line-height: normal; }
   .cropRect { position: absolute; border: 1.5px solid #ffd98a; box-shadow: 0 0 0 9999px rgba(0,0,0,.55); cursor: move; }
   .cropRect .thirds { position: absolute; inset: 0; pointer-events: none; opacity: .55;
@@ -39,7 +45,18 @@
   .healDot { position: absolute; border: 1.5px solid rgba(255,217,138,.95); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 0 1px rgba(0,0,0,.4) inset; }
   .healDot.del { border-color: #ff9a9a; }
   #emptyMsg { color: #8b8b92; font-size: 13.5px; text-align: center; line-height: 1.9; padding: 30px 10px; }
-  #tabs { display: flex; gap: 6px; overflow-x: auto; padding: 4px 12px 10px; scrollbar-width: none; position: sticky; top: 53px; background: #101012; z-index: 15; }
+  #tabs { display: flex; gap: 6px; overflow-x: auto; height: 46px; align-items: center; padding: 0 12px; scrollbar-width: none; position: sticky; top: 50px; background: #101012; z-index: 15; }
+  #recipeList { max-height: 36vh; overflow-y: auto; }
+  @media (min-width: 900px) {
+    #app { display: grid; grid-template-columns: minmax(0, 1fr) 400px; grid-template-rows: auto auto 1fr; column-gap: 8px; }
+    #topbar { grid-column: 1 / -1; grid-row: 1; }
+    #glwarn { grid-column: 1 / -1; grid-row: 2; }
+    #strip { grid-column: 1 / -1; grid-row: 2; }
+    #stage { grid-column: 1; grid-row: 3; top: 62px; align-self: start; }
+    #tabs { grid-column: 2; grid-row: 3; align-self: start; top: 62px; }
+    #panel { grid-column: 2; grid-row: 3; margin-top: 54px; max-width: none; }
+    #view { max-height: 76vh; }
+  }
   #tabs::-webkit-scrollbar { display: none; }
   .tab { flex: 0 0 auto; background: transparent; color: #a7a7ae; border: 1px solid #333338; border-radius: 999px; padding: 6px 13px; font-size: 12.5px; cursor: pointer; }
   .tab.active { background: #e8e8ea; color: #121214; border-color: #e8e8ea; font-weight: 700; }
@@ -76,6 +93,7 @@
 </style>
 </head>
 <body>
+<div id="app">
 <div id="topbar">
   <div class="logo">Film<span>Lab</span></div>
   <button class="tbtn" id="btnOpen">📂 ဖွင့်မယ်</button>
@@ -95,6 +113,7 @@
 </div>
 <div id="tabs"></div>
 <div id="panel"></div>
+</div><!-- /#app -->
 <div id="toast"></div>
 
 <dialog id="recipeDlg">
@@ -144,7 +163,8 @@ function defaultSettings() {
     distortion: 0, perspV: 0, perspH: 0, rotate: 0,
     crop: { x: 0, y: 0, w: 1, h: 1 },
     heals: [], healSize: 4,
-    bokeh: 0, focusX: 0.5, focusY: 0.42
+    bokeh: 0, focusX: 0.5, focusY: 0.42,
+    spotlight: 0, spotR: 65, smooth: 0
   };
 }
 
@@ -506,9 +526,27 @@ uniform sampler2D uSharp;
 uniform sampler2D uBlur;
 uniform sampler2D uMask;
 uniform float uRadial; uniform vec2 uFocus; uniform float uAspect;
+uniform float uMode; uniform float uSmooth; uniform float uSkinMask;
+float skinProb(vec3 c){
+  float tot = max(c.r + c.g + c.b, 0.0001);
+  vec3 s = c / tot;
+  float pr = smoothstep(0.295, 0.355, s.r) * (1.0 - smoothstep(0.445, 0.505, s.r));
+  float pg = smoothstep(0.255, 0.295, s.g) * (1.0 - smoothstep(0.365, 0.405, s.g));
+  float L = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  float lumW = smoothstep(0.03, 0.10, L) * (1.0 - smoothstep(0.93, 1.0, L));
+  float mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
+  float satW = 1.0 - smoothstep(0.45, 0.75, mx - mn) * 0.7;
+  return clamp(pr * pg * 2.4, 0.0, 1.0) * lumW * satW;
+}
 void main(){
   vec3 sharp = texture2D(uSharp, vUv).rgb;
   vec3 blur = texture2D(uBlur, vUv).rgb;
+  if (uMode > 0.5) {
+    float m = skinProb(sharp);
+    if (uSkinMask > 0.5) m *= texture2D(uMask, vUv).r;
+    gl_FragColor = vec4(mix(sharp, blur, clamp(m * uSmooth, 0.0, 1.0) * 0.85), 1.0);
+    return;
+  }
   float m;
   if (uRadial > 0.5) {
     vec2 d = (vUv - uFocus) * vec2(uAspect, 1.0);
@@ -524,21 +562,36 @@ precision highp float;
 varying vec2 vUv;
 uniform sampler2D uTex; uniform vec2 uTexel; uniform vec2 uRes;
 uniform float uSharpen, uGrain, uGrainSize, uVignette, uLeak, uDust, uSeed, uAspect;
-uniform vec4 uHealPos[12];
-uniform vec2 uHealOff[12];
+uniform vec4 uHealPos[24];
 uniform float uHealCount;
+uniform float uSpot;
+uniform vec2 uSpotC;
+uniform float uSpotR;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 void main(){
   vec3 c = texture2D(uTex, vUv).rgb;
+  if (uSpot > 0.001) {
+    vec2 sd = (vUv - uSpotC) * vec2(uAspect, 1.0);
+    float inside = smoothstep(uSpotR, uSpotR * 0.25, length(sd));
+    c *= 1.0 + uSpot * 0.38 * inside;
+    c *= 1.0 - uSpot * 0.16 * (1.0 - inside);
+  }
   if (uHealCount > 0.0) {
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 24; i++) {
       if (float(i) >= uHealCount) break;
       vec4 hp = uHealPos[i];
       vec2 d = (vUv - hp.xy) * vec2(uAspect, 1.0);
-      float wgt = smoothstep(hp.z, hp.z * 0.45, length(d));
+      float wgt = smoothstep(hp.z, hp.z * 0.5, length(d));
       if (wgt > 0.001) {
-        vec3 src = texture2D(uTex, clamp(vUv + uHealOff[i], 0.002, 0.998)).rgb;
-        c = mix(c, src, wgt * 0.94);
+        // Snapseed-style fill: average a ring AROUND the spot (outside the blemish), feathered in
+        vec3 fill = vec3(0.0);
+        float rOut = hp.z * 1.5;
+        for (int k = 0; k < 8; k++) {
+          float a = float(k) * 0.7853981;
+          vec2 off = vec2(cos(a) * rOut / uAspect, sin(a) * rOut);
+          fill += texture2D(uTex, clamp(hp.xy + off, 0.002, 0.998)).rgb;
+        }
+        c = mix(c, fill / 8.0, wgt * 0.96);
       }
     }
   }
@@ -777,9 +830,10 @@ function renderPipeline(st, w, h, toCanvas) {
   gl.bindTexture(gl.TEXTURE_2D, imgTex);
   drawQuad(progs.grade);
   let srcTex = fbos.grade.tex;
-  // Optional bokeh
-  if (st.bokeh > 0) {
-    const radius = st.bokeh / 100 * Math.max(w, h) * 0.012;
+  // Blur-based tools (skin smooth + bokeh) share one blur chain
+  if (st.bokeh > 0 || st.smooth > 0) {
+    const strength = Math.max(st.bokeh, st.smooth * 0.7);
+    const radius = strength / 100 * Math.max(w, h) * 0.012;
     const passes = [[fbos.blur1, 1, 0], [fbos.blur2, 0, 1], [fbos.blur1, 1, 0], [fbos.blur2, 0, 1]];
     let src = fbos.grade.tex;
     for (const [fb, dx, dy] of passes) {
@@ -792,17 +846,39 @@ function renderPipeline(st, w, h, toCanvas) {
       drawQuad(progs.blur);
       src = fb.tex;
     }
-    bindTarget(fbos.comp, w, h);
-    gl.useProgram(progs.comp.prog);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fbos.grade.tex); gl.uniform1i(U(progs.comp, 'uSharp'), 0);
-    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, src); gl.uniform1i(U(progs.comp, 'uBlur'), 1);
-    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, maskTex); gl.uniform1i(U(progs.comp, 'uMask'), 2);
-    gl.uniform1f(U(progs.comp, 'uRadial'), (useRadialMask || !maskTex) ? 1 : 0);
-    gl.uniform2f(U(progs.comp, 'uFocus'), st.focusX, 1 - st.focusY);
-    gl.uniform1f(U(progs.comp, 'uAspect'), w / h);
-    gl.activeTexture(gl.TEXTURE0);
-    drawQuad(progs.comp);
-    srcTex = fbos.comp.tex;
+    const blurTex = src;
+    const bindCompInputs = (sharpTex) => {
+      gl.useProgram(progs.comp.prog);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sharpTex); gl.uniform1i(U(progs.comp, 'uSharp'), 0);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, blurTex); gl.uniform1i(U(progs.comp, 'uBlur'), 1);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, maskTex); gl.uniform1i(U(progs.comp, 'uMask'), 2);
+      gl.activeTexture(gl.TEXTURE0);
+    };
+    if (st.smooth > 0) {
+      bindTarget(fbos.comp, w, h);
+      bindCompInputs(fbos.grade.tex);
+      gl.uniform1f(U(progs.comp, 'uMode'), 1);
+      gl.uniform1f(U(progs.comp, 'uSmooth'), st.smooth / 100);
+      gl.uniform1f(U(progs.comp, 'uSkinMask'), (!useRadialMask && maskTex) ? 1 : 0);
+      gl.uniform1f(U(progs.comp, 'uRadial'), 0);
+      gl.uniform2f(U(progs.comp, 'uFocus'), st.focusX, 1 - st.focusY);
+      gl.uniform1f(U(progs.comp, 'uAspect'), w / h);
+      drawQuad(progs.comp);
+      srcTex = fbos.comp.tex;
+    }
+    if (st.bokeh > 0) {
+      const target = st.smooth > 0 ? fbos.grade : fbos.comp;
+      bindTarget(target, w, h);
+      bindCompInputs(srcTex);
+      gl.uniform1f(U(progs.comp, 'uMode'), 0);
+      gl.uniform1f(U(progs.comp, 'uSmooth'), 0);
+      gl.uniform1f(U(progs.comp, 'uSkinMask'), 0);
+      gl.uniform1f(U(progs.comp, 'uRadial'), (useRadialMask || !maskTex) ? 1 : 0);
+      gl.uniform2f(U(progs.comp, 'uFocus'), st.focusX, 1 - st.focusY);
+      gl.uniform1f(U(progs.comp, 'uAspect'), w / h);
+      drawQuad(progs.comp);
+      srcTex = target.tex;
+    }
   }
   // Final: finish
   if (toCanvas) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, w, h); }
@@ -821,17 +897,19 @@ function renderPipeline(st, w, h, toCanvas) {
   gl.uniform1f(U(progs.finish, 'uDust'), st.dust / 100);
   gl.uniform1f(U(progs.finish, 'uSeed'), Math.random() * 10);
   gl.uniform1f(U(progs.finish, 'uAspect'), w / h);
-  // heal spots: stored in original-image coords (top-down); convert to display coords via the crop
+  // heal spots + spotlight centre: stored in original-image coords (top-down); convert via the crop
   const hcr = cropEditActive ? { x: 0, y: 0, w: 1, h: 1 } : (st.crop || { x: 0, y: 0, w: 1, h: 1 });
-  const heals = (st.heals || []).slice(0, 12);
+  const heals = (st.heals || []).slice(0, 24);
   heals.forEach((hh, i) => {
     const du = (hh.x - hcr.x) / hcr.w;
     const dvTop = (hh.y - hcr.y) / hcr.h;
     const radAspect = (hh.r / hcr.w) * (w / h);
     gl.uniform4f(U(progs.finish, 'uHealPos[' + i + ']'), du, 1 - dvTop, radAspect, 0);
-    gl.uniform2f(U(progs.finish, 'uHealOff[' + i + ']'), (hh.dx || 0) / hcr.w, -((hh.dy || 0) / hcr.h));
   });
   gl.uniform1f(U(progs.finish, 'uHealCount'), heals.length);
+  gl.uniform1f(U(progs.finish, 'uSpot'), (st.spotlight || 0) / 100);
+  gl.uniform2f(U(progs.finish, 'uSpotC'), (st.focusX - hcr.x) / hcr.w, 1 - ((st.focusY - hcr.y) / hcr.h));
+  gl.uniform1f(U(progs.finish, 'uSpotR'), (st.spotR || 65) / 100);
   drawQuad(progs.finish);
 }
 </script>
@@ -982,6 +1060,46 @@ function note(parent, text) {
   parent.appendChild(d);
   return d;
 }
+let recipeIdx = -1;
+function recipeStepper(panel) {
+  const title = document.createElement('div');
+  title.style.cssText = 'font-size:13px; font-weight:700; padding-top:10px';
+  title.textContent = '💾 Recipe လှည့်သုံး';
+  panel.appendChild(title);
+  const list = loadRecipes();
+  if (!list.length) {
+    note(panel, 'Recipe မရှိသေးပါ — ပြင်ထားတဲ့ ပုံစံကို 💾 Recipe မှာ သိမ်းပါ (သို့) RNI .xmp သွင်းပါ။');
+    return;
+  }
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:8px 0 2px';
+  const prev = document.createElement('button');
+  prev.className = 'chip'; prev.textContent = '◀'; prev.style.fontSize = '15px'; prev.style.padding = '8px 16px';
+  const next = document.createElement('button');
+  next.className = 'chip'; next.textContent = '▶'; next.style.fontSize = '15px'; next.style.padding = '8px 16px';
+  const nm = document.createElement('div');
+  nm.id = 'stepperName';
+  nm.style.cssText = 'flex:1; text-align:center; font-size:13px; color:#ffd98a; line-height:1.5';
+  const showName = () => {
+    nm.textContent = recipeIdx >= 0 && list[recipeIdx]
+      ? (recipeIdx + 1) + ' / ' + list.length + ' — ' + list[recipeIdx].name
+      : '◀ ▶ နှိပ်ပြီး တစ်ခုချင်း လှည့်ကြည့်ပါ';
+  };
+  const applyIdx = (i) => {
+    recipeIdx = ((i % list.length) + list.length) % list.length;
+    const fresh = parseRecipe(JSON.stringify(list[recipeIdx])).settings;
+    fresh.lutName = S.lutName; fresh.lutIntensity = S.lutIntensity;
+    fresh.crop = deepClone(S.crop); fresh.heals = deepClone(S.heals); fresh.healSize = S.healSize;
+    replaceSettings(fresh);
+    showName();
+  };
+  prev.addEventListener('click', () => applyIdx(recipeIdx < 0 ? list.length - 1 : recipeIdx - 1));
+  next.addEventListener('click', () => applyIdx(recipeIdx < 0 ? 0 : recipeIdx + 1));
+  showName();
+  row.append(prev, nm, next);
+  panel.appendChild(row);
+  note(panel, 'နှိပ်တိုင်း recipe တစ်ခု ပြောင်းပြီး ပုံပေါ် ချက်ချင်း ပြတယ် — ပုံကို မကွယ်ဘဲ တစ်ခုချင်း နှိုင်း ကြည့်လို့ ရတယ်။');
+}
 function panelPreset(panel) {
   const grid = document.createElement('div');
   grid.className = 'presetGrid';
@@ -1003,6 +1121,7 @@ function panelPreset(panel) {
     grid.appendChild(d);
   }
   panel.appendChild(grid);
+  recipeStepper(panel);
   const rb = document.createElement('div'); rb.className = 'rowBtns';
   const reset = document.createElement('button'); reset.className = 'chip'; reset.textContent = '↺ အကုန် ရှင်း (Reset)';
   reset.addEventListener('click', () => { const fresh = defaultSettings(); fresh.lutName = S.lutName; fresh.lutIntensity = S.lutIntensity; replaceSettings(fresh); buildPanel(); });
@@ -1312,7 +1431,7 @@ function panelHeal(panel) {
   panel.appendChild(chips);
   const cnt = document.createElement('div');
   cnt.className = 'note';
-  cnt.innerHTML = 'လက်ရှိ စက်: <b id="healCount">0</b> / 12';
+  cnt.innerHTML = 'လက်ရှိ စက်: <b id="healCount">0</b> / 24';
   panel.appendChild(cnt);
   const rb = document.createElement('div');
   rb.className = 'rowBtns';
@@ -1322,7 +1441,7 @@ function panelHeal(panel) {
   clr.addEventListener('click', () => { S.heals = []; markEdited(); refreshHealMarkers(); scheduleRender(); });
   rb.appendChild(clr);
   panel.appendChild(rb);
-  note(panel, 'ပုံပေါ် ထိလိုက်ရင် အဲ့ဒီ နေရာကို အပေါ်ဘက် အနီးအနား pixel နဲ့ အစားထိုး ဖုံးပေးတယ် (clone-blend နည်း) — dust အစက်၊ အမျှင်၊ ဝက်ခြံ လို သေးသေးတွေ အတွက် သင့်တော်တယ်။ content-aware မဟုတ်သေးလို့ အကြီးစား ပြင်တာတော့ မရပါ။');
+  note(panel, 'Snapseed ပုံစံ: ထိရုံ နဲ့ မရရင် ထိပြီး ဆွဲ (brush လို ပွတ်) လို့ ရတယ်။ ဖြည့်တာက အစက် ပတ်ပတ်လည် pixel တွေကို ကြည့်ပြီး အလယ် ပျမ်းမျှ ဖြည့်တဲ့ နည်း — dust၊ အမျှင်၊ ဝက်ခြံ လို သေးသေးတွေ အတွက်။ ချဲ့ကြည့်ဖို့ လက် ၂ ချောင်း ဆွဲပါ။ အကြီးစား/အနေ အထား ရှုပ်တဲ့ နေရာတွေတော့ မရသေးပါ။');
   refreshHealMarkers();
 }
 function refreshHealMarkers() {
@@ -1345,32 +1464,93 @@ function refreshHealMarkers() {
     ov.appendChild(d);
   }
 }
-$('healOverlay').addEventListener('pointerdown', (e) => {
-  if (!activePhoto()) return;
+function healToImage(e) {
   const ov = $('healOverlay');
   const f = overlayFrac(e, ov);
   const cr = S.crop || { x: 0, y: 0, w: 1, h: 1 };
-  const ix = clamp(cr.x + clamp(f.x, 0, 1) * cr.w, 0, 1);
-  const iy = clamp(cr.y + clamp(f.y, 0, 1) * cr.h, 0, 1);
-  if (healMode === 'del') {
-    let best = -1, bd = 1e9;
-    (S.heals || []).forEach((hh, i) => {
-      const d = Math.hypot(hh.x - ix, (hh.y - iy) * (imgW / Math.max(1, imgH)));
-      if (d < bd) { bd = d; best = i; }
-    });
-    if (best >= 0 && bd < Math.max(S.heals[best].r * 1.7, 0.02)) { S.heals.splice(best, 1); toast('စက် ဖျက်ပြီး'); }
-  } else {
-    if ((S.heals || []).length >= 12) { toast('အများဆုံး ၁၂ စက်ပဲ ရပါတယ်'); return; }
-    const rad = S.healSize / 200;
-    let dy = -(2.4 * rad * imgW) / Math.max(1, imgH);
-    if (iy + dy < rad) dy = -dy;
-    S.heals.push({ x: ix, y: iy, r: rad, dx: 0, dy });
+  return { ix: clamp(cr.x + clamp(f.x, 0, 1) * cr.w, 0, 1), iy: clamp(cr.y + clamp(f.y, 0, 1) * cr.h, 0, 1) };
+}
+function healAddAt(ix, iy) {
+  if ((S.heals || []).length >= 24) { toast('အများဆုံး ၂၄ စက်ပဲ ရပါတယ်'); return false; }
+  const rad = S.healSize / 200;
+  let dy = -(2.4 * rad * imgW) / Math.max(1, imgH);
+  if (iy + dy < rad) dy = -dy;
+  S.heals.push({ x: ix, y: iy, r: rad, dx: 0, dy });
+  return true;
+}
+function healDeleteAt(ix, iy) {
+  let best = -1, bd = 1e9;
+  (S.heals || []).forEach((hh, i) => {
+    const d = Math.hypot(hh.x - ix, (hh.y - iy) * (imgW / Math.max(1, imgH)));
+    if (d < bd) { bd = d; best = i; }
+  });
+  if (best >= 0 && bd < Math.max(S.heals[best].r * 1.7, 0.02)) { S.heals.splice(best, 1); toast('စက် ဖျက်ပြီး'); return true; }
+  return false;
+}
+const healPtrs = new Map();
+let healStroke = null, healPinch = null;
+$('healOverlay').addEventListener('pointerdown', (e) => {
+  if (!activePhoto()) return;
+  const ov = $('healOverlay');
+  healPtrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (healPtrs.size === 2) {
+    const [a, b] = [...healPtrs.values()];
+    healPinch = { d: Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), z: viewT.z };
+    healStroke = null;
+  } else if (healPtrs.size === 1) {
+    const p = healToImage(e);
+    healStroke = { moved: false, lastIx: p.ix, lastIy: p.iy, downIx: p.ix, downIy: p.iy, downPx: e.clientX, downPy: e.clientY };
   }
-  markEdited();
-  refreshHealMarkers();
-  scheduleRender();
+  try { ov.setPointerCapture(e.pointerId); } catch (err) {}
   e.preventDefault();
 });
+$('healOverlay').addEventListener('pointermove', (e) => {
+  if (!healPtrs.has(e.pointerId)) return;
+  healPtrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (healPinch && healPtrs.size === 2) {
+    const [a, b] = [...healPtrs.values()];
+    const d = Math.max(20, Math.hypot(a.x - b.x, a.y - b.y));
+    setViewZoom(healPinch.z * (d / healPinch.d), (a.x + b.x) / 2, (a.y + b.y) / 2);
+    return;
+  }
+  if (healStroke && healMode === 'add') {
+    if (Math.abs(e.clientX - healStroke.downPx) + Math.abs(e.clientY - healStroke.downPy) > 8) healStroke.moved = true;
+    if (!healStroke.moved) return;
+    const p = healToImage(e);
+    const rad = S.healSize / 200;
+    const step = Math.max(0.004, rad * 0.9);
+    let lx = healStroke.lastIx, ly = healStroke.lastIy;
+    let guard = 0;
+    while (guard++ < 40) {
+      const d = Math.hypot(p.ix - lx, (p.iy - ly) * (imgW / Math.max(1, imgH)));
+      if (d < step) break;
+      const t = step / d;
+      lx = lx + (p.ix - lx) * t;
+      ly = ly + (p.iy - ly) * t;
+      if (!healAddAt(lx, ly)) break;
+    }
+    healStroke.lastIx = p.ix; healStroke.lastIy = p.iy;
+    markEdited();
+    refreshHealMarkers();
+    scheduleRender();
+  }
+});
+const healPtrEnd = (e) => {
+  const wasStroke = healStroke;
+  healPtrs.delete(e.pointerId);
+  if (healPtrs.size < 2) healPinch = null;
+  if (healPtrs.size === 0) {
+    if (wasStroke && !wasStroke.moved && !healPinch) {
+      let changed = false;
+      if (healMode === 'del') changed = healDeleteAt(wasStroke.downIx, wasStroke.downIy);
+      else changed = healAddAt(wasStroke.downIx, wasStroke.downIy);
+      if (changed) { markEdited(); refreshHealMarkers(); scheduleRender(); }
+    }
+    healStroke = null;
+  }
+};
+$('healOverlay').addEventListener('pointerup', healPtrEnd);
+$('healOverlay').addEventListener('pointercancel', healPtrEnd);
 
 /* ---------- preview zoom gestures (pinch / wheel / drag-pan) ---------- */
 const zoomPtrs = new Map();
@@ -1555,6 +1735,10 @@ function panelGeometry(panel) {
 }
 function panelPortrait(panel) {
   sliderRow(panel, 'Bokeh အား', () => S.bokeh, v => { S.bokeh = v; if (v > 0) ensureSegmentation(); }, 0, 100, 1, 0, F0);
+  sliderRow(panel, 'Spotlight', () => S.spotlight, v => S.spotlight = v, 0, 100, 1, 0, F0);
+  sliderRow(panel, 'Spotlight အရွယ်', () => S.spotR, v => S.spotR = v, 20, 120, 1, 65, F0);
+  sliderRow(panel, 'Skin Smooth', () => S.smooth, v => { S.smooth = v; if (v > 0) ensureSegmentation(); }, 0, 100, 1, 0, F0);
+  note(panel, 'Spotlight + Bokeh (radial) အတွက် အလယ် အမှတ်က ပုံကို ထိပြီး သတ်မှတ် တာပါ။ Skin Smooth က အသားအရောင် နေရာတွေကို ပဲ ပျော့ပေးတာ — များများ တင်ရင် texture ပျောက် တတ်လို့ ပါးပါး ပဲ သုံးပါ။');
   const st = note(panel, '');
   const upd = () => {
     st.innerHTML = '';
