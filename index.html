@@ -8,10 +8,12 @@
 <meta name="theme-color" content="#101012">
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; padding: 0; background: #101012; color: #e8e8ea; font-family: -apple-system, "Helvetica Neue", "Noto Sans Myanmar", sans-serif; }
+  html, body { margin: 0; padding: 0; height: 100%; overscroll-behavior: none; background: #101012; color: #e8e8ea; font-family: -apple-system, "Helvetica Neue", "Noto Sans Myanmar", sans-serif; }
   button { font-family: inherit; }
-  #app { display: flex; flex-direction: column; }
-  #topbar { order: 0; display: flex; align-items: center; gap: 8px; height: 50px; padding: 0 12px; border-bottom: 1px solid #26262a; position: sticky; top: 0; background: #101012; z-index: 20; }
+  #app { display: flex; flex-direction: column; height: 100dvh; }
+  #topbar { order: 0; display: flex; align-items: center; gap: 8px; height: 50px; padding: 0 12px; border-bottom: 1px solid #26262a; position: relative; background: #101012; z-index: 20; }
+  .tbtn svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; }
+  .hdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
   #glwarn { order: 1; }
   #tabs { order: 2; }
   #strip { order: 3; }
@@ -29,9 +31,9 @@
   .thumb.active { border-color: #d4a24a; }
   .thumb .badge { position: absolute; right: 2px; bottom: 2px; background: rgba(0,0,0,.65); color: #ffd98a; font-size: 9px; padding: 1px 4px; border-radius: 4px; display: none; }
   .thumb.edited .badge { display: block; }
-  #stage { display: flex; align-items: center; justify-content: center; padding: 10px 0; min-height: 200px; overflow: hidden; position: sticky; top: 130px; z-index: 10; background: #101012; }
+  #stage { display: flex; align-items: center; justify-content: center; padding: 10px 0; min-height: 0; flex: 1 1 auto; overflow: hidden; position: relative; z-index: 10; background: #101012; }
   #stageInner { position: relative; line-height: 0; touch-action: none; }
-  #view { max-width: 100%; max-height: 52vh; border-radius: 4px; box-shadow: 0 6px 30px rgba(0,0,0,.5); touch-action: none; background: #18181b; }
+  #view { max-width: 100%; max-height: 100%; border-radius: 4px; box-shadow: 0 6px 30px rgba(0,0,0,.5); touch-action: none; background: #18181b; }
   #cropOverlay, #healOverlay { position: absolute; inset: 0; display: none; line-height: normal; touch-action: none; }
   input[type="text"], select, textarea { font-size: 16px; }
   .deckStrip { display: flex; flex-wrap: wrap; gap: 5px; padding: 10px 0 4px; margin: 0 -10px; }
@@ -40,7 +42,7 @@
   .deckIco svg { width: 23px; height: 23px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   .deckCap { font-size: 9px; opacity: .85; white-space: nowrap; }
   .deckChip.active { background: #d4a24a; color: #191512; border-color: #d4a24a; font-weight: 700; }
-  .prow.deckActive { background: #1d1d22; border-radius: 0; padding: 10px; margin: 6px -16px 0; flex-wrap: wrap; }
+  .prow.deckActive { background: #1d1d22; border-radius: 0; padding: 10px 5px; margin: 6px -16px 0; flex-wrap: wrap; }
   .prow.deckActive label { order: 0; }
   .prow.deckActive output { order: 1; margin-left: auto; }
   .prow.deckActive input[type="range"] { order: 2; flex: 1 1 100%; width: 100%; }
@@ -58,7 +60,7 @@
   #focusExit { display: none; position: fixed; right: 14px; bottom: 18px; z-index: 60; background: rgba(24,24,28,.94); color: #ffd98a; border: 1px solid #d4a24a; border-radius: 999px; padding: 11px 18px; font-size: 13.5px; cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
   body.focusView #tabs, body.focusView #panel, body.focusView #strip, body.focusView #glwarn { display: none !important; }
   body.focusView #stage { position: static; min-height: 0; }
-  body.focusView #view { max-height: 86vh; }
+  body.focusView #view { max-height: 100%; }
   .cropRect { position: absolute; border: 1.5px solid #ffd98a; box-shadow: 0 0 0 9999px rgba(0,0,0,.55); cursor: move; }
   .cropRect .thirds { position: absolute; inset: 0; pointer-events: none; opacity: .55;
     background:
@@ -71,22 +73,22 @@
   .healDot { position: absolute; border: 1.5px solid rgba(255,217,138,.95); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 0 1px rgba(0,0,0,.4) inset; }
   .healDot.del { border-color: #ff9a9a; }
   #emptyMsg { color: #8b8b92; font-size: 13.5px; text-align: center; line-height: 1.9; padding: 30px 10px; }
-  #tabs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 12px; scrollbar-width: none; position: sticky; top: 50px; background: #101012; z-index: 15; }
+  #tabs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 12px; scrollbar-width: none; position: relative; background: #101012; z-index: 15; }
   #recipeList { max-height: 36vh; overflow-y: auto; }
   @media (min-width: 900px) {
     #app { display: grid; grid-template-columns: minmax(0, 1fr) 400px; grid-template-rows: auto auto 1fr; column-gap: 8px; }
     #topbar { grid-column: 1 / -1; grid-row: 1; }
     #glwarn { grid-column: 1 / -1; grid-row: 2; }
     #strip { grid-column: 1 / -1; grid-row: 2; }
-    #stage { grid-column: 1; grid-row: 3; top: 62px; align-self: start; }
-    #tabs { grid-column: 2; grid-row: 3; align-self: start; top: 62px; flex-wrap: nowrap; height: 46px; padding: 0 12px; overflow-x: auto; }
-    #panel { grid-column: 2; grid-row: 3; margin-top: 54px; max-width: none; }
-    #view { max-height: 76vh; }
+    #stage { grid-column: 1; grid-row: 3; align-self: stretch; }
+    #tabs { grid-column: 2; grid-row: 3; align-self: start; flex-wrap: nowrap; height: 46px; padding: 0 12px; overflow-x: auto; }
+    #panel { grid-column: 2; grid-row: 3; margin-top: 54px; max-width: none; max-height: calc(100dvh - 120px); }
+    #view { max-height: 100%; }
   }
   #tabs::-webkit-scrollbar { display: none; }
   .tab { flex: 0 0 auto; background: transparent; color: #a7a7ae; border: 1px solid #333338; border-radius: 999px; padding: 4px 8px; font-size: 11.5px; cursor: pointer; }
   .tab.active { background: #e8e8ea; color: #121214; border-color: #e8e8ea; font-weight: 700; }
-  #panel { padding: 2px 16px 40px; max-width: 640px; margin: 0 auto; }
+  #panel { padding: 2px 16px 18px; width: 100%; max-width: 640px; margin: 0 auto; flex: 0 1 auto; max-height: 46dvh; overflow-y: auto; overscroll-behavior: contain; }
   .prow { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #1e1e22; }
   .prow label { flex: 0 0 108px; font-size: 12.5px; color: #c9c9cf; }
   .prow output { flex: 0 0 38px; text-align: right; font-size: 12px; color: #d4a24a; font-variant-numeric: tabular-nums; }
@@ -121,13 +123,13 @@
 <body>
 <div id="app">
 <div id="topbar">
-  <div class="logo">Film<span>Lab</span> <small style="color:#8b8b92; font-size:11px; font-weight:400">v3.9</small></div>
-  <button class="tbtn" id="btnOpen" title="ဖွင့်မယ်">📂</button>
-  <button class="tbtn" id="btnRecipe">💾 Recipe</button>
-  <button class="tbtn" id="btnBatch" title="အစုလိုက် ထုတ်မယ်">⬇</button>
+  <div class="logo">Film<span>Lab</span> <small style="color:#8b8b92; font-size:11px; font-weight:400">v3.10</small></div>
+  <button class="tbtn" id="btnOpen" title="ဖွင့်မယ်"><svg viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h5L11.5 8.5h8A1.5 1.5 0 0 1 21 10v7.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></svg></button>
+  <button class="tbtn" id="btnRecipe"><svg viewBox="0 0 24 24"><path d="M5 3.5h11L20.5 8v11a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5z"/><path d="M7.5 3.5v5h8v-5M7.5 20.5v-6h9v6"/></svg> Recipe</button>
+  <button class="tbtn" id="btnBatch" title="အစုလိုက် ထုတ်မယ်"><svg viewBox="0 0 24 24"><path d="M12 3.5v10.5M7.8 10.2 12 14.4l4.2-4.2M4 19.5h16"/></svg></button>
   <button class="tbtn primary" id="btnExport">Export</button>
 </div>
-<div id="glwarn">⚠️ ဒီ browser မှာ WebGL မရလို့ ပုံ ပြင် မရပါ — Safari/Chrome နောက်ဆုံး version နဲ့ စမ်းကြည့်ပါ။</div>
+<div id="glwarn">ဒီ browser မှာ WebGL မရလို့ ပုံ ပြင် မရပါ — Safari/Chrome နောက်ဆုံး version နဲ့ စမ်းကြည့်ပါ။</div>
 <div id="strip"></div>
 <div id="stage">
   <div id="stageInner">
@@ -144,7 +146,7 @@
 <div id="toast"></div>
 
 <dialog id="recipeDlg">
-  <h3>💾 Recipe များ</h3>
+  <h3>Recipe များ</h3>
   <div style="display:flex; gap:6px; margin-bottom:6px">
     <input type="text" id="recipeName" placeholder="Recipe အမည် (ဥပမာ — My Portra)">
     <button class="mini" id="btnSaveRecipe" style="white-space:nowrap">သိမ်းမယ်</button>
@@ -974,10 +976,22 @@ function renderPreview() {
   if (viewCanvas.height !== h) viewCanvas.height = h;
   renderPipeline(S, w, h, true);
   refreshHealMarkers();
+  fitView();
 }
 
 /* ---------- preview zoom / pan (view only — export is unaffected) ---------- */
 const viewT = { z: 1, tx: 0, ty: 0 };
+function fitView() {
+  const st = $('stage');
+  if (!st || !viewCanvas || !viewCanvas.width || !viewCanvas.height) return;
+  const aw = st.clientWidth, ah = st.clientHeight - 20;
+  if (aw < 20 || ah < 20) return;
+  const s = Math.min(aw / viewCanvas.width, ah / viewCanvas.height);
+  if (!isFinite(s) || s <= 0) return;
+  viewCanvas.style.width = Math.max(2, Math.floor(viewCanvas.width * s)) + 'px';
+  viewCanvas.style.height = Math.max(2, Math.floor(viewCanvas.height * s)) + 'px';
+}
+window.addEventListener('resize', () => fitView());
 function applyViewTransform() {
   const el = $('stageInner');
   if (el) el.style.transform = 'translate(' + viewT.tx + 'px,' + viewT.ty + 'px) scale(' + viewT.z + ')';
@@ -1022,8 +1036,8 @@ const FEV = (v) => (v > 0 ? '+' : '') + v.toFixed(2);
 
 /* ---------- tabs ---------- */
 const TABS = [
-  ['preset', '🎞 Preset'], ['crop', '✂ Crop'], ['light', '💡 Light'], ['color', '🎨 Color'], ['curves', '〰 Curves'],
-  ['hsl', '🌈 HSL'], ['effects', '✨ Effects'], ['geometry', '📐 Geometry'], ['heal', '🩹 Heal'], ['portrait', '👤 Portrait']
+  ['preset', 'Preset'], ['crop', 'Crop'], ['light', 'Light'], ['color', 'Color'], ['curves', 'Curves'],
+  ['hsl', 'HSL'], ['effects', 'Effects'], ['geometry', 'Geometry'], ['heal', 'Heal'], ['portrait', 'Portrait']
 ];
 function buildTabs() {
   const bar = $('tabs');
@@ -1148,6 +1162,7 @@ function applyDeck() {
     });
   });
   panel.insertBefore(strip, panel.firstChild);
+  requestAnimationFrame(() => fitView());
   let startIdx = rows.findIndex(r => { const lb = r.querySelector('label'); return lb && lb.textContent === deckActiveLabel[activeTab]; });
   activate(startIdx >= 0 ? startIdx : 0);
 }
@@ -1161,10 +1176,10 @@ let recipeIdx = -1;
 function recipeStepper(panel) {
   const title = document.createElement('div');
   title.style.cssText = 'font-size:13px; font-weight:700; padding-top:10px';
-  title.textContent = '💾 Recipe လှည့်သုံး';
+  title.textContent = 'Recipe လှည့်သုံး';
   panel.appendChild(title);
   if (!loadRecipes().length) {
-    note(panel, 'Recipe မရှိသေးပါ — ပြင်ထားတဲ့ ပုံစံကို 💾 Recipe မှာ သိမ်းပါ (သို့) RNI .xmp သွင်းပါ။');
+    note(panel, 'Recipe မရှိသေးပါ — ပြင်ထားတဲ့ ပုံစံကို Recipe မှာ သိမ်းပါ (သို့) RNI .xmp သွင်းပါ။');
     return;
   }
   const row = document.createElement('div');
@@ -1180,7 +1195,7 @@ function recipeStepper(panel) {
   box.id = 'recipeListBox';
   const showName = () => {
     const l = loadRecipes();
-    bar.textContent = recipeIdx >= 0 && l[recipeIdx] ? ('💾 ' + l[recipeIdx].name + '  ▾') : '💾 Recipe ရွေးပါ ▾';
+    bar.textContent = recipeIdx >= 0 && l[recipeIdx] ? (l[recipeIdx].name + '  ▾') : 'Recipe ရွေးပါ ▾';
   };
   const renderList = () => {
     const l = loadRecipes();
@@ -1253,7 +1268,7 @@ function panelPreset(panel) {
   panel.appendChild(rb);
   panel.appendChild(grid);
   const lutBox = document.createElement('div');
-  lutBox.innerHTML = '<div style="font-size:13px; font-weight:700; padding-top:8px">🎬 LUT <span style="color:#8b8b92; font-weight:400" id="lutNameTxt"></span></div>';
+  lutBox.innerHTML = '<div style="font-size:13px; font-weight:700; padding-top:8px">LUT <span style="color:#8b8b92; font-weight:400" id="lutNameTxt"></span></div>';
   panel.appendChild(lutBox);
   $('lutNameTxt').textContent = S.lutName ? '— ' + S.lutName : '(မရှိ)';
   sliderRow(panel, 'LUT အား', () => S.lutIntensity, v => S.lutIntensity = v, 0, 100, 1, 80, F0);
@@ -1264,7 +1279,7 @@ function panelPreset(panel) {
   bClear.addEventListener('click', () => { clearLUT(); S.lutName = ''; buildPanel(); scheduleRender(); });
   const bHald = document.createElement('button'); bHald.className = 'chip'; bHald.textContent = '⬇ Hald identity ထုတ်မယ်';
   bHald.addEventListener('click', downloadIdentityHald);
-  const bXmp = document.createElement('button'); bXmp.className = 'chip'; bXmp.textContent = '📥 RNI .xmp သွင်းမယ်';
+  const bXmp = document.createElement('button'); bXmp.className = 'chip'; bXmp.textContent = 'RNI .xmp သွင်းမယ်';
   bXmp.addEventListener('click', () => $('fileXMP').click());
   lb.append(bLoad, bClear, bHald, bXmp);
   panel.appendChild(lb);
@@ -1377,7 +1392,7 @@ function renderLUTLibrary() {
   for (const e of lutLibrary) {
     const c = document.createElement('button');
     c.className = 'chip' + (S.lutName === e.name ? ' active' : '');
-    c.textContent = '🎬 ' + e.name;
+    c.textContent = e.name;
     c.addEventListener('click', async () => {
       const all = await idbLUTAll();
       const entry = all.find(x => x.name === e.name);
@@ -1451,11 +1466,44 @@ function applyCropBake() {
     ni.src = url;
   }, type, 0.95);
 }
+function rotate90(dir) {
+  const ph = activePhoto();
+  if (!ph || !ph.img) return;
+  const W = ph.img.naturalWidth, H = ph.img.naturalHeight;
+  const cv = document.createElement('canvas');
+  cv.width = H; cv.height = W;
+  const ctx = cv.getContext('2d');
+  ctx.translate(H / 2, W / 2);
+  ctx.rotate(dir * Math.PI / 2);
+  ctx.drawImage(ph.img, -W / 2, -H / 2);
+  const type = cv.width * cv.height > 16000000 ? 'image/jpeg' : 'image/png';
+  cv.toBlob((blob) => {
+    if (!blob) { toast('လှည့် မရပါ'); return; }
+    const url = URL.createObjectURL(blob);
+    const ni = new Image();
+    ni.onload = () => {
+      cropUndo = { photo: ph, img: ph.img, crop: deepClone(S.crop), heals: deepClone(S.heals), focusX: S.focusX, focusY: S.focusY, rotate: S.rotate };
+      ph.img = ni;
+      const rot = (x, y) => dir > 0 ? [1 - y, x] : [y, 1 - x];
+      S.heals = S.heals.map(s2 => { const pt = rot(s2.cx, s2.cy); return { ...s2, cx: pt[0], cy: pt[1], r: s2.r * W / H }; });
+      const fp = rot(S.focusX, S.focusY); S.focusX = fp[0]; S.focusY = fp[1];
+      S.crop = { x: 0, y: 0, w: 1, h: 1 };
+      S.rotate = 0;
+      uploadSourceImage(ph.img);
+      markEdited(); buildPanel(); renderStrip(); scheduleRender();
+      URL.revokeObjectURL(url);
+      toast('90° လှည့်ပြီး ✓', 1500);
+    };
+    ni.onerror = () => toast('လှည့် မရပါ');
+    ni.src = url;
+  }, type, 0.95);
+}
 function undoCropBake() {
   const ph = activePhoto();
   if (!cropUndo || !ph || cropUndo.photo !== ph) return;
   ph.img = cropUndo.img;
   S.crop = cropUndo.crop; S.heals = cropUndo.heals; S.focusX = cropUndo.focusX; S.focusY = cropUndo.focusY;
+  if (cropUndo.rotate !== undefined) S.rotate = cropUndo.rotate;
   cropUndo = null;
   uploadSourceImage(ph.img);
   markEdited(); buildPanel(); renderStrip(); scheduleRender();
@@ -1504,6 +1552,17 @@ function panelCrop(panel) {
     rb.appendChild(un);
   }
   panel.appendChild(rb);
+  sliderRow(panel, 'Rotate', () => S.rotate, v => S.rotate = v, -45, 45, 0.1, 0, (v) => v.toFixed(1) + '°');
+  const r90 = document.createElement('div');
+  r90.className = 'rowBtns';
+  const bL = document.createElement('button');
+  bL.className = 'chip'; bL.id = 'rotLBtn'; bL.textContent = '⟲ 90°';
+  bL.addEventListener('click', () => rotate90(-1));
+  const bR = document.createElement('button');
+  bR.className = 'chip'; bR.id = 'rotRBtn'; bR.textContent = '⟳ 90°';
+  bR.addEventListener('click', () => rotate90(1));
+  r90.append(bL, bR);
+  panel.appendChild(r90);
   note(panel, 'ဘောင်ကို ဆွဲ ရွှေ့၊ ထောင့်တွေကို ဆွဲ ချုံ့/ချဲ့ လုပ်ပါ။ "✓ Crop လုပ်မယ်" နှိပ်ရင် ရွေးထားတဲ့ အပိုင်းက ဓာတ်ပုံ အသစ် ဖြစ်သွားမယ် (ပြန်ဖျက် တစ်ဆင့် ရှိတယ်)။ မနှိပ်ရင် crop က export မှာပဲ အကျုံးဝင်တယ်။');
 }
 function updateCropInfo() {
@@ -1615,7 +1674,7 @@ function panelHeal(panel) {
   rb.className = 'rowBtns';
   const clr = document.createElement('button');
   clr.className = 'chip';
-  clr.textContent = '🗑 အကုန် ဖျက်';
+  clr.textContent = '✕ အကုန် ဖျက်';
   clr.addEventListener('click', () => { S.heals = []; markEdited(); refreshHealMarkers(); scheduleRender(); });
   rb.appendChild(clr);
   panel.appendChild(rb);
@@ -1783,6 +1842,7 @@ function toggleFocusView(force) {
   focusView = force !== undefined ? force : !focusView;
   document.body.classList.toggle('focusView', focusView);
   $('focusExit').style.display = focusView ? 'block' : 'none';
+  requestAnimationFrame(() => fitView());
 }
 $('focusExit').addEventListener('click', () => toggleFocusView(false));
 </script>
@@ -1881,15 +1941,15 @@ function initCurveDrag(cv) {
 }
 let hslChannel = 'red';
 const HSL_META = [
-  ['red', '🔴 Red'], ['orange', '🟠 Orange'], ['yellow', '🟡 Yellow'], ['green', '🟢 Green'],
-  ['aqua', '🔵 Aqua'], ['blue', '🟦 Blue'], ['purple', '🟣 Purple'], ['magenta', '🟪 Magenta']
+  ['red', 'Red', '#e5484d'], ['orange', 'Orange', '#f76b15'], ['yellow', 'Yellow', '#ffd60a'], ['green', 'Green', '#46a758'],
+  ['aqua', 'Aqua', '#12a594'], ['blue', 'Blue', '#0090ff'], ['purple', 'Purple', '#8e4ec6'], ['magenta', 'Magenta', '#d6409f']
 ];
 function panelHSL(panel) {
   const chips = document.createElement('div'); chips.className = 'chips';
-  HSL_META.forEach(([id, lb]) => {
+  HSL_META.forEach(([id, lb, col]) => {
     const c = document.createElement('button');
     c.className = 'chip' + (hslChannel === id ? ' active' : '');
-    c.textContent = lb;
+    c.innerHTML = '<span class="hdot" style="background:' + col + '"></span>' + lb;
     c.addEventListener('click', () => { hslChannel = id; buildPanel(); });
     chips.appendChild(c);
   });
@@ -1940,7 +2000,7 @@ function panelPortrait(panel) {
   upd();
   panel._updSeg = upd;
   const rb = document.createElement('div'); rb.className = 'rowBtns';
-  const btn = document.createElement('button'); btn.className = 'chip'; btn.textContent = '👤 Subject ပြန် ခွဲခြားမယ်';
+  const btn = document.createElement('button'); btn.className = 'chip'; btn.textContent = 'Subject ပြန် ခွဲခြားမယ်';
   btn.addEventListener('click', () => { segState = 'idle'; ensureSegmentation(); });
   rb.appendChild(btn);
   panel.appendChild(rb);
@@ -2272,7 +2332,7 @@ $('fileXMP').addEventListener('change', async (e) => {
   saveRecipes(list);
   renderRecipeList();
   const stubNote = stubbed ? ' — သတိ: ' + stubbed + ' ခုက Look stub ဖိုင်တွေ (အရောင် အနှစ် Lightroom ထဲမှာပဲ ရှိတယ်)၊ effect မရှိ/နည်းပါး ဖြစ်မယ်' : '';
-  if (added) toast('XMP ' + added + ' ခု recipe အဖြစ် သွင်းပြီး — 💾 Recipe မှာ သုံးလို့ ရပြီ' + (skipped ? ' (' + skipped + ' ခု ကျော်)' : '') + stubNote, 4600);
+  if (added) toast('XMP ' + added + ' ခု recipe အဖြစ် သွင်းပြီး — Recipe မှာ သုံးလို့ ရပြီ' + (skipped ? ' (' + skipped + ' ခု ကျော်)' : '') + stubNote, 4600);
   else toast('XMP ထဲက ဖတ်လို့ ရတာ မတွေ့ပါ' + stubNote, 3600);
 });
 
