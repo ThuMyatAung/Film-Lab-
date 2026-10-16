@@ -99,10 +99,10 @@
 <body>
 <div id="app">
 <div id="topbar">
-  <div class="logo">Film<span>Lab</span> <small style="color:#8b8b92; font-size:11px; font-weight:400">v3.2</small></div>
-  <button class="tbtn" id="btnOpen">📂 ဖွင့်မယ်</button>
+  <div class="logo">Film<span>Lab</span> <small style="color:#8b8b92; font-size:11px; font-weight:400">v3.3</small></div>
+  <button class="tbtn" id="btnOpen" title="ဖွင့်မယ်">📂</button>
   <button class="tbtn" id="btnRecipe">💾 Recipe</button>
-  <button class="tbtn" id="btnBatch">⬇ အစုလိုက်</button>
+  <button class="tbtn" id="btnBatch" title="အစုလိုက် ထုတ်မယ်">⬇</button>
   <button class="tbtn primary" id="btnExport">Export</button>
 </div>
 <div id="glwarn">⚠️ ဒီ browser မှာ WebGL မရလို့ ပုံ ပြင် မရပါ — Safari/Chrome နောက်ဆုံး version နဲ့ စမ်းကြည့်ပါ။</div>
@@ -2092,11 +2092,14 @@ $('fileXMP').addEventListener('change', async (e) => {
   e.target.value = '';
   if (!files.length) return;
   const list = loadRecipes();
-  let added = 0, skipped = 0;
+  let added = 0, skipped = 0, stubbed = 0;
   for (const f of files) {
     try {
-      const { name, patch, found } = parseXMPSettings(await f.text());
-      if (!found) { skipped++; continue; }
+      const text = await f.text();
+      const isStub = /Stubbed="true"/.test(text);
+      const { name, patch, found } = parseXMPSettings(text);
+      if (!found) { skipped++; if (isStub) stubbed++; continue; }
+      if (isStub) stubbed++;
       const rname = name || f.name.replace(/\.xmp$/i, '');
       const settings = applyPatch(defaultSettings(), patch);
       const existing = list.findIndex(r => r.name === rname);
@@ -2107,8 +2110,9 @@ $('fileXMP').addEventListener('change', async (e) => {
   }
   saveRecipes(list);
   renderRecipeList();
-  if (added) toast('XMP ' + added + ' ခု recipe အဖြစ် သွင်းပြီး — 💾 Recipe မှာ သုံးလို့ ရပြီ' + (skipped ? ' (' + skipped + ' ခု ကျော်)' : ''), 3600);
-  else toast('XMP ထဲက ဖတ်လို့ ရတာ မတွေ့ပါ', 3200);
+  const stubNote = stubbed ? ' — သတိ: ' + stubbed + ' ခုက Look stub ဖိုင်တွေ (အရောင် အနှစ် Lightroom ထဲမှာပဲ ရှိတယ်)၊ effect မရှိ/နည်းပါး ဖြစ်မယ်' : '';
+  if (added) toast('XMP ' + added + ' ခု recipe အဖြစ် သွင်းပြီး — 💾 Recipe မှာ သုံးလို့ ရပြီ' + (skipped ? ' (' + skipped + ' ခု ကျော်)' : '') + stubNote, 4600);
+  else toast('XMP ထဲက ဖတ်လို့ ရတာ မတွေ့ပါ' + stubNote, 3600);
 });
 
 /* ================= Segmentation (MediaPipe, lazy) ================= */
