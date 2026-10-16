@@ -29,18 +29,18 @@
   .thumb.active { border-color: #d4a24a; }
   .thumb .badge { position: absolute; right: 2px; bottom: 2px; background: rgba(0,0,0,.65); color: #ffd98a; font-size: 9px; padding: 1px 4px; border-radius: 4px; display: none; }
   .thumb.edited .badge { display: block; }
-  #stage { display: flex; align-items: center; justify-content: center; padding: 10px 12px; min-height: 200px; overflow: hidden; position: sticky; top: 130px; z-index: 10; background: #101012; }
+  #stage { display: flex; align-items: center; justify-content: center; padding: 10px 0; min-height: 200px; overflow: hidden; position: sticky; top: 130px; z-index: 10; background: #101012; }
   #stageInner { position: relative; line-height: 0; touch-action: none; }
-  #view { max-width: 100%; max-height: 34vh; border-radius: 6px; box-shadow: 0 6px 30px rgba(0,0,0,.5); touch-action: none; background: #18181b; }
+  #view { max-width: 100%; max-height: 52vh; border-radius: 4px; box-shadow: 0 6px 30px rgba(0,0,0,.5); touch-action: none; background: #18181b; }
   #cropOverlay, #healOverlay { position: absolute; inset: 0; display: none; line-height: normal; touch-action: none; }
   input[type="text"], select, textarea { font-size: 16px; }
-  .deckStrip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; padding: 10px 0 4px; }
-  .deckChip { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; background: #232329; color: #cfcfd6; border: 1px solid #3a3a42; border-radius: 12px; padding: 10px 0 8px; cursor: pointer; }
+  .deckStrip { display: flex; flex-wrap: wrap; gap: 5px; padding: 10px 0 4px; margin: 0 -10px; }
+  .deckChip { flex: 1 1 21%; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; background: #232329; color: #cfcfd6; border: 1px solid #3a3a42; border-radius: 12px; padding: 10px 0 8px; cursor: pointer; }
   .deckIco { display: flex; }
   .deckIco svg { width: 23px; height: 23px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   .deckCap { font-size: 9px; opacity: .85; white-space: nowrap; }
   .deckChip.active { background: #d4a24a; color: #191512; border-color: #d4a24a; font-weight: 700; }
-  .prow.deckActive { background: #1d1d22; border-radius: 10px; padding: 10px 8px; margin-top: 6px; flex-wrap: wrap; }
+  .prow.deckActive { background: #1d1d22; border-radius: 0; padding: 10px; margin: 6px -16px 0; flex-wrap: wrap; }
   .prow.deckActive label { order: 0; }
   .prow.deckActive output { order: 1; margin-left: auto; }
   .prow.deckActive input[type="range"] { order: 2; flex: 1 1 100%; width: 100%; }
@@ -121,7 +121,7 @@
 <body>
 <div id="app">
 <div id="topbar">
-  <div class="logo">Film<span>Lab</span> <small style="color:#8b8b92; font-size:11px; font-weight:400">v3.8</small></div>
+  <div class="logo">Film<span>Lab</span> <small style="color:#8b8b92; font-size:11px; font-weight:400">v3.9</small></div>
   <button class="tbtn" id="btnOpen" title="ဖွင့်မယ်">📂</button>
   <button class="tbtn" id="btnRecipe">💾 Recipe</button>
   <button class="tbtn" id="btnBatch" title="အစုလိုက် ထုတ်မယ်">⬇</button>
