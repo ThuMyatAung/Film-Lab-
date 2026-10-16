@@ -2,7 +2,7 @@
 <html lang="my">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>FilmLab — Photo Editor</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#101012">
@@ -33,6 +33,24 @@
   #stageInner { position: relative; line-height: 0; touch-action: none; }
   #view { max-width: 100%; max-height: 34vh; border-radius: 6px; box-shadow: 0 6px 30px rgba(0,0,0,.5); touch-action: none; background: #18181b; }
   #cropOverlay, #healOverlay { position: absolute; inset: 0; display: none; line-height: normal; touch-action: none; }
+  input[type="text"], select, textarea { font-size: 16px; }
+  .deckStrip { display: flex; gap: 3px; flex-wrap: nowrap; padding: 10px 0 4px; }
+  .deckChip { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; background: #232329; color: #cfcfd6; border: 1px solid #3a3a42; border-radius: 10px; padding: 6px 0; cursor: pointer; }
+  .deckIco { font-size: 19px; line-height: 1.15; }
+  .deckCap { font-size: 8.5px; opacity: .85; white-space: nowrap; }
+  .deckChip.active { background: #d4a24a; color: #191512; border-color: #d4a24a; font-weight: 700; }
+  .prow.deckActive { background: #1d1d22; border-radius: 10px; padding: 10px 8px; margin-top: 6px; }
+  .prow.deckActive input[type="range"] { -webkit-appearance: none; appearance: none; height: 34px; background: transparent; cursor: pointer; }
+  .prow.deckActive input[type="range"]::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: #4a4a55; }
+  .prow.deckActive input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%; background: #f5f2ea; border: 2px solid #d4a24a; margin-top: -11.5px; box-shadow: 0 2px 8px rgba(0,0,0,.55); cursor: pointer; }
+  .prow.deckActive input[type="range"]::-moz-range-track { height: 3px; border-radius: 2px; background: #4a4a55; }
+  .prow.deckActive input[type="range"]::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%; background: #f5f2ea; border: 2px solid #d4a24a; box-shadow: 0 2px 8px rgba(0,0,0,.55); cursor: pointer; }
+  .prow.deckActive output { font-size: 16px; font-weight: 700; color: #ffd98a; cursor: pointer; text-decoration: underline dotted; min-width: 52px; }
+  #recipeListBox { display: none; max-height: 38vh; overflow-y: auto; border: 1px solid #3a3a42; border-radius: 10px; margin-top: 6px; background: #17171b; }
+  #recipeListBox.open { display: block; }
+  .recipeRow { padding: 13px 14px; font-size: 14px; color: #e8e8ec; border-bottom: 1px solid #26262c; cursor: pointer; }
+  .recipeRow:last-child { border-bottom: none; }
+  .recipeRow.cur { color: #ffd98a; font-weight: 700; }
   #focusExit { display: none; position: fixed; right: 14px; bottom: 18px; z-index: 60; background: rgba(24,24,28,.94); color: #ffd98a; border: 1px solid #d4a24a; border-radius: 999px; padding: 11px 18px; font-size: 13.5px; cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
   body.focusView #tabs, body.focusView #panel, body.focusView #strip, body.focusView #glwarn { display: none !important; }
   body.focusView #stage { position: static; min-height: 0; }
@@ -99,7 +117,7 @@
 <body>
 <div id="app">
 <div id="topbar">
-  <div class="logo">Film<span>Lab</span> <small style="color:#8b8b92; font-size:11px; font-weight:400">v3.3</small></div>
+  <div class="logo">Film<span>Lab</span> <small style="color:#8b8b92; font-size:11px; font-weight:400">v3.5</small></div>
   <button class="tbtn" id="btnOpen" title="ဖွင့်မယ်">📂</button>
   <button class="tbtn" id="btnRecipe">💾 Recipe</button>
   <button class="tbtn" id="btnBatch" title="အစုလိုက် ထုတ်မယ်">⬇</button>
@@ -714,7 +732,7 @@ function uploadSourceImage(img) {
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-  imgW = img.naturalWidth; imgH = img.naturalHeight;
+  imgW = img.naturalWidth || img.width; imgH = img.naturalHeight || img.height;
 }
 function updateCurvesTexture() {
   if (!gl) return;
@@ -1058,6 +1076,49 @@ function buildPanel() {
   else if (activeTab === 'heal') panelHeal(panel);
   else if (activeTab === 'portrait') panelPortrait(panel);
   syncOverlays();
+  applyDeck();
+}
+const DECK_TABS = ['light', 'color', 'effects', 'geometry', 'portrait'];
+const DECK_ICONS = { 'Exposure': ['🔆', 'Expos'], 'Brightness': ['💡', 'Bright'], 'Contrast': ['◐', 'Contr'], 'Highlights': ['🌟', 'High'], 'Shadows': ['🌑', 'Shad'], 'Whites': ['⚪', 'Whites'], 'Blacks': ['⚫', 'Blacks'], 'Fade': ['🌫️', 'Fade'], 'Temperature': ['🌡️', 'Temp'], 'Tint': ['🟣', 'Tint'], 'Vibrance': ['🌈', 'Vib'], 'Saturation': ['🎨', 'Sat'], 'Grain': ['🎞️', 'Grain'], 'Grain Size': ['🔍', 'G.Size'], 'Vignette': ['⭕', 'Vig'], 'Sharpen': ['✨', 'Sharp'], 'Light Leak': ['🌅', 'Leak'], 'Dust': ['💫', 'Dust'], 'Distortion': ['🌀', 'Dist'], 'Perspective ↕': ['↕️', 'Per↕'], 'Perspective ↔': ['↔️', 'Per↔'], 'Rotate': ['⟳', 'Rotate'], 'Bokeh အား': ['◎', 'Bokeh'], 'Spotlight': ['🔦', 'Spot'], 'Spotlight အရွယ်': ['🔍', 'S.Size'], 'Skin Smooth': ['🧴', 'Skin'] };
+const deckActiveLabel = {};
+function applyDeck() {
+  if (!DECK_TABS.includes(activeTab)) return;
+  const panel = $('panel');
+  const rows = [...panel.querySelectorAll('.prow')].filter(r => r.querySelector('input[type="range"]'));
+  if (rows.length < 3) return;
+  const strip = document.createElement('div');
+  strip.className = 'deckStrip'; strip.id = 'deckStrip';
+  const chips = [];
+  const activate = (idx) => {
+    rows.forEach((r, i) => { r.style.display = i === idx ? '' : 'none'; r.classList.toggle('deckActive', i === idx); });
+    chips.forEach((c, i) => c.classList.toggle('active', i === idx));
+    const lb = rows[idx].querySelector('label');
+    if (lb) deckActiveLabel[activeTab] = lb.textContent;
+  };
+  rows.forEach((r, i) => {
+    const lb = r.querySelector('label');
+    const chip = document.createElement('button');
+    chip.className = 'deckChip';
+    const meta = (lb && DECK_ICONS[lb.textContent]) || ['🎚️', lb ? lb.textContent.split(' ')[0] : ('S' + (i + 1))];
+    const ic = document.createElement('span'); ic.className = 'deckIco'; ic.textContent = meta[0];
+    const cp = document.createElement('span'); cp.className = 'deckCap'; cp.textContent = meta[1];
+    chip.append(ic, cp);
+    chip.addEventListener('click', () => activate(i));
+    strip.appendChild(chip); chips.push(chip);
+    const out = r.querySelector('output');
+    const inp = r.querySelector('input');
+    if (out && inp) out.addEventListener('click', () => {
+      const v = prompt('တန်ဖိုး ရိုက်ထည့်ပါ (' + inp.min + ' – ' + inp.max + ')', inp.value);
+      if (v === null) return;
+      const n = parseFloat(v);
+      if (isNaN(n)) return;
+      inp.value = Math.min(parseFloat(inp.max), Math.max(parseFloat(inp.min), n));
+      inp.dispatchEvent(new Event('input'));
+    });
+  });
+  panel.insertBefore(strip, panel.firstChild);
+  let startIdx = rows.findIndex(r => { const lb = r.querySelector('label'); return lb && lb.textContent === deckActiveLabel[activeTab]; });
+  activate(startIdx >= 0 ? startIdx : 0);
 }
 function note(parent, text) {
   const d = document.createElement('div');
@@ -1071,24 +1132,35 @@ function recipeStepper(panel) {
   title.style.cssText = 'font-size:13px; font-weight:700; padding-top:10px';
   title.textContent = '💾 Recipe လှည့်သုံး';
   panel.appendChild(title);
-  const list = loadRecipes();
-  if (!list.length) {
+  if (!loadRecipes().length) {
     note(panel, 'Recipe မရှိသေးပါ — ပြင်ထားတဲ့ ပုံစံကို 💾 Recipe မှာ သိမ်းပါ (သို့) RNI .xmp သွင်းပါ။');
     return;
   }
   const row = document.createElement('div');
   row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:8px 0 2px';
   const prev = document.createElement('button');
-  prev.className = 'chip'; prev.textContent = '◀'; prev.style.cssText = 'font-size:18px; padding:12px 22px; flex:0 0 auto';
+  prev.className = 'chip'; prev.textContent = '◀'; prev.style.cssText = 'font-size:18px; padding:12px 18px; flex:0 0 auto';
   const next = document.createElement('button');
-  next.className = 'chip'; next.textContent = '▶'; next.style.cssText = 'font-size:18px; padding:12px 22px; flex:0 0 auto';
-  const nm = document.createElement('div');
-  nm.id = 'stepperName';
-  nm.style.cssText = 'flex:1; text-align:center; font-size:13px; color:#ffd98a; line-height:1.5';
+  next.className = 'chip'; next.textContent = '▶'; next.style.cssText = 'font-size:18px; padding:12px 18px; flex:0 0 auto';
+  const bar = document.createElement('button');
+  bar.className = 'chip'; bar.id = 'stepperName';
+  bar.style.cssText = 'flex:1; font-size:14px; padding:12px 8px; color:#ffd98a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis';
+  const box = document.createElement('div');
+  box.id = 'recipeListBox';
   const showName = () => {
-    nm.textContent = recipeIdx >= 0 && list[recipeIdx]
-      ? (recipeIdx + 1) + ' / ' + list.length + ' — ' + list[recipeIdx].name
-      : '◀ ▶ နှိပ် (သို့) ဆွဲပြီး တစ်ခုချင်း လှည့်ကြည့်ပါ';
+    const l = loadRecipes();
+    bar.textContent = recipeIdx >= 0 && l[recipeIdx] ? ('💾 ' + l[recipeIdx].name + '  ▾') : '💾 Recipe ရွေးပါ ▾';
+  };
+  const renderList = () => {
+    const l = loadRecipes();
+    box.innerHTML = '';
+    l.forEach((r, i) => {
+      const d = document.createElement('div');
+      d.className = 'recipeRow' + (i === recipeIdx ? ' cur' : '');
+      d.textContent = (i === recipeIdx ? '✓ ' : '') + r.name;
+      d.addEventListener('click', () => { applyIdx(i); box.classList.remove('open'); });
+      box.appendChild(d);
+    });
   };
   const applyIdx = (i) => {
     try {
@@ -1100,10 +1172,12 @@ function recipeStepper(panel) {
       fresh.lutName = S.lutName; fresh.lutIntensity = S.lutIntensity;
       fresh.crop = deepClone(S.crop); fresh.heals = deepClone(S.heals); fresh.healSize = S.healSize;
       replaceSettings(fresh);
-      nm.textContent = (recipeIdx + 1) + ' / ' + fresh2.length + ' — ' + rec.name;
+      showName();
+      if (box.classList.contains('open')) renderList();
       toast('Recipe: ' + rec.name, 1100);
     } catch (err) { toast('Recipe မရပါ — ' + err.message, 3400); }
   };
+  bar.addEventListener('click', () => { if (box.classList.toggle('open')) renderList(); });
   prev.addEventListener('click', () => applyIdx(recipeIdx < 0 ? loadRecipes().length - 1 : recipeIdx - 1));
   next.addEventListener('click', () => applyIdx(recipeIdx < 0 ? 0 : recipeIdx + 1));
   let swipeX = null;
@@ -1115,9 +1189,10 @@ function recipeStepper(panel) {
     if (Math.abs(dx) > 42) applyIdx(recipeIdx + (dx < 0 ? 1 : -1));
   });
   showName();
-  row.append(prev, nm, next);
+  row.append(prev, bar, next);
   panel.appendChild(row);
-  note(panel, 'နှိပ်တိုင်း recipe တစ်ခု ပြောင်းပြီး ပုံပေါ် ချက်ချင်း ပြတယ် — ပုံကို မကွယ်ဘဲ တစ်ခုချင်း နှိုင်း ကြည့်လို့ ရတယ်။');
+  panel.appendChild(box);
+  note(panel, 'အမည် ဘားကို နှိပ်ရင် စာရင်း ပွင့်လာမယ် — အပေါ်/အောက် ရွှေ့ ရွေးပါ။ ◀ ▶ နဲ့လည်း တစ်ခုချင်း လှည့်လို့ ရတယ်။ ရွေးထားတဲ့ နာမည် ဘားမှာ ကျန်နေမယ်။');
 }
 function panelPreset(panel) {
   recipeStepper(panel);
@@ -1314,6 +1389,47 @@ const CROP_ASPECTS = [
   ['Free', null], ['မူရင်း', 'orig'], ['1:1', [1, 1]], ['3:2', [3, 2]], ['2:3', [2, 3]],
   ['4:3', [4, 3]], ['3:4', [3, 4]], ['16:9', [16, 9]], ['9:16', [9, 16]], ['5:4', [5, 4]], ['4:5', [4, 5]]
 ];
+let cropUndo = null;
+function cropRemap(v, c0, cw) { return (v - c0) / cw; }
+function applyCropBake() {
+  const ph = activePhoto();
+  if (!ph) return;
+  const c = S.crop;
+  if (!c || (c.x <= 0.001 && c.y <= 0.001 && c.w >= 0.999 && c.h >= 0.999)) { toast('အရင် Crop ဘောင် ရွေးပါ'); return; }
+  const W = ph.img.naturalWidth, H = ph.img.naturalHeight;
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(W * c.w)); cv.height = Math.max(1, Math.round(H * c.h));
+  cv.getContext('2d').drawImage(ph.img, W * c.x, H * c.y, W * c.w, H * c.h, 0, 0, cv.width, cv.height);
+  const type = cv.width * cv.height > 16000000 ? 'image/jpeg' : 'image/png';
+  cv.toBlob((blob) => {
+    if (!blob) { toast('Crop မရပါ'); return; }
+    const url = URL.createObjectURL(blob);
+    const ni = new Image();
+    ni.onload = () => {
+      cropUndo = { photo: ph, img: ph.img, crop: deepClone(S.crop), heals: deepClone(S.heals), focusX: S.focusX, focusY: S.focusY };
+      ph.img = ni;
+      S.heals = S.heals.map(s2 => ({ ...s2, cx: cropRemap(s2.cx, c.x, c.w), cy: cropRemap(s2.cy, c.y, c.h), r: s2.r / c.w })).filter(s2 => s2.cx > -0.05 && s2.cx < 1.05 && s2.cy > -0.05 && s2.cy < 1.05);
+      S.focusX = clamp(cropRemap(S.focusX, c.x, c.w), 0, 1); S.focusY = clamp(cropRemap(S.focusY, c.y, c.h), 0, 1);
+      S.crop = { x: 0, y: 0, w: 1, h: 1 };
+      uploadSourceImage(ph.img);
+      markEdited(); buildPanel(); renderStrip(); scheduleRender();
+      URL.revokeObjectURL(url);
+      toast('Crop လုပ်ပြီး ✓', 1600);
+    };
+    ni.onerror = () => toast('Crop မရပါ');
+    ni.src = url;
+  }, type, 0.95);
+}
+function undoCropBake() {
+  const ph = activePhoto();
+  if (!cropUndo || !ph || cropUndo.photo !== ph) return;
+  ph.img = cropUndo.img;
+  S.crop = cropUndo.crop; S.heals = cropUndo.heals; S.focusX = cropUndo.focusX; S.focusY = cropUndo.focusY;
+  cropUndo = null;
+  uploadSourceImage(ph.img);
+  markEdited(); buildPanel(); renderStrip(); scheduleRender();
+  toast('Crop ပြန်ဖျက်ပြီး', 1400);
+}
 function panelCrop(panel) {
   const chips = document.createElement('div');
   chips.className = 'chips';
@@ -1344,8 +1460,20 @@ function panelCrop(panel) {
   rst.textContent = '↺ Crop ရှင်း (အပြည့်)';
   rst.addEventListener('click', () => { S.crop = { x: 0, y: 0, w: 1, h: 1 }; markEdited(); buildPanel(); });
   rb.appendChild(rst);
+  const applyB = document.createElement('button');
+  applyB.className = 'chip'; applyB.id = 'cropApplyBtn';
+  applyB.style.cssText = 'background:#d4a24a; color:#191512; font-weight:700; border-color:#d4a24a';
+  applyB.textContent = '✓ Crop လုပ်မယ်';
+  applyB.addEventListener('click', applyCropBake);
+  rb.appendChild(applyB);
+  if (cropUndo && activePhoto() && cropUndo.photo === activePhoto()) {
+    const un = document.createElement('button');
+    un.className = 'chip'; un.id = 'cropUndoBtn'; un.textContent = '↩ Bake ပြန်ဖျက်';
+    un.addEventListener('click', undoCropBake);
+    rb.appendChild(un);
+  }
   panel.appendChild(rb);
-  note(panel, 'ဘောင်ကို ဆွဲ ရွှေ့၊ ထောင့်တွေကို ဆွဲ ချုံ့/ချဲ့ လုပ်ပါ။ Crop က export အရွယ်ကို သတ်မှတ် တယ် — တခြား tab တွေမှာ crop ပြီးသား ပုံပဲ မြင်ရမယ်။');
+  note(panel, 'ဘောင်ကို ဆွဲ ရွှေ့၊ ထောင့်တွေကို ဆွဲ ချုံ့/ချဲ့ လုပ်ပါ။ "✓ Crop လုပ်မယ်" နှိပ်ရင် ရွေးထားတဲ့ အပိုင်းက ဓာတ်ပုံ အသစ် ဖြစ်သွားမယ် (ပြန်ဖျက် တစ်ဆင့် ရှိတယ်)။ မနှိပ်ရင် crop က export မှာပဲ အကျုံးဝင်တယ်။');
 }
 function updateCropInfo() {
   const el = $('cropInfo');
@@ -1612,6 +1740,7 @@ stageInnerEl.addEventListener('wheel', (e) => {
   setViewZoom(viewT.z * Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
 }, { passive: false });
 viewCanvas.addEventListener('dblclick', (e) => {
+  if (focusView) return;
   if (activeTab === 'crop' || activeTab === 'heal') return;
   if (viewT.z > 1) resetViewZoom();
   else setViewZoom(2.5, e.clientX, e.clientY);
@@ -1863,7 +1992,8 @@ viewCanvas.addEventListener('pointerup', (e) => {
   const tapDist = dp ? Math.abs(e.clientX - dp.x) + Math.abs(e.clientY - dp.y) : 99;
   const quickTap = Date.now() - (viewCanvas._downAt || 0) < 300 && tapDist < 10;
   if (quickTap && activeTab !== 'portrait' && activeTab !== 'crop' && activeTab !== 'heal') {
-    if (focusTapTimer) { clearTimeout(focusTapTimer); focusTapTimer = null; }
+    if (focusView) { if (focusTapTimer) { clearTimeout(focusTapTimer); focusTapTimer = null; } toggleFocusView(false); }
+    else if (focusTapTimer) { clearTimeout(focusTapTimer); focusTapTimer = null; }
     else focusTapTimer = setTimeout(() => { focusTapTimer = null; toggleFocusView(); }, 280);
   }
   if (Date.now() - (viewCanvas._downAt || 0) < 300 && tapDist < 10 && activeTab === 'portrait' && useRadialMask) {
