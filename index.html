@@ -33,7 +33,8 @@
   .thumb.edited .badge { display: block; }
   #stage { display: flex; align-items: center; justify-content: center; padding: 10px 0; min-height: 0; flex: 1 1 auto; overflow: hidden; position: relative; z-index: 10; background: #101012; }
   #stageInner { position: relative; line-height: 0; touch-action: none; }
-  #view { max-width: 100%; max-height: 100%; border-radius: 4px; box-shadow: 0 6px 30px rgba(0,0,0,.5); touch-action: none; background: #18181b; }
+  #view { max-width: 100%; max-height: 100%; border-radius: 4px; box-shadow: 0 6px 30px rgba(0,0,0,.5); touch-action: none; background: #18181b; -webkit-touch-callout: none; user-select: none; }
+  #cmpBadge { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(10,10,12,.72); color: #ffd98a; font-size: 11.5px; padding: 4px 12px; border-radius: 999px; border: 1px solid rgba(255,217,138,.4); display: none; z-index: 6; pointer-events: none; letter-spacing: .4px; }
   #cropOverlay, #healOverlay { position: absolute; inset: 0; display: none; line-height: normal; touch-action: none; }
   input[type="text"], select, textarea { font-size: 16px; }
   .deckStrip { display: flex; flex-wrap: wrap; gap: 5px; padding: 10px 0 4px; margin: 0 -10px; }
@@ -70,8 +71,9 @@
       linear-gradient(to bottom, transparent calc(66.66% - .5px), rgba(255,217,138,.6) 66.66%, transparent calc(66.66% + .5px)); }
   .cropHandle { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; cursor: pointer; z-index: 3; }
   .cropHandle::after { content: ''; position: absolute; left: 5px; top: 5px; width: 12px; height: 12px; background: #ffd98a; border: 1.5px solid #17130a; border-radius: 3px; }
-  .healDot { position: absolute; border: 1.5px solid rgba(255,217,138,.95); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 0 1px rgba(0,0,0,.4) inset; }
-  .healDot.del { border-color: #ff9a9a; }
+  .healDot { position: absolute; border: 1.5px solid rgba(255,217,138,.95); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 0 1px rgba(0,0,0,.4) inset; animation: healFade 1.1s ease-out forwards; }
+  @keyframes healFade { 0% { opacity: 1; } 55% { opacity: 1; } 100% { opacity: 0; } }
+  .healDot.del { border-color: #ff9a9a; animation: none; opacity: 1; }
   #emptyMsg { color: #8b8b92; font-size: 13.5px; text-align: center; line-height: 1.9; padding: 30px 10px; }
   #tabs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 12px; scrollbar-width: none; position: relative; background: #101012; z-index: 15; }
   #recipeList { max-height: 36vh; overflow-y: auto; }
@@ -100,10 +102,11 @@
   .chip.active { background: #d4a24a; border-color: #d4a24a; color: #17130a; font-weight: 700; }
   .note { font-size: 11.5px; color: #8b8b92; line-height: 1.8; padding: 8px 0; }
   .note b { color: #c9c9cf; }
-  .presetGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; padding: 10px 0; }
-  .preset { background: #1d1d20; border: 1px solid #2c2c31; border-radius: 10px; padding: 12px 8px; font-size: 12px; text-align: center; cursor: pointer; color: #e8e8ea; line-height: 1.5; }
+  .presetStrip { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 8px; padding: 10px 16px; margin: 0 -16px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .presetStrip::-webkit-scrollbar { display: none; }
+  .preset { flex: 0 0 auto; width: 84px; background: #1d1d20; border: 1px solid #2c2c31; border-radius: 9px; padding: 8px 5px; font-size: 11.5px; text-align: center; cursor: pointer; color: #e8e8ea; line-height: 1.45; }
   .preset.active { border-color: #d4a24a; color: #ffd98a; }
-  .preset small { display: block; color: #8b8b92; font-size: 10.5px; margin-top: 2px; }
+  .preset small { display: block; color: #8b8b92; font-size: 9px; margin-top: 2px; line-height: 1.35; }
   .rowBtns { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 0; }
   #curveWrap { padding: 10px 0; }
   #curveCanvas { background: #17171a; border: 1px solid #2c2c31; border-radius: 10px; touch-action: none; display: block; margin: 0 auto; }
@@ -123,7 +126,7 @@
 <body>
 <div id="app">
 <div id="topbar">
-  <div class="logo">Film<span>Lab</span> <small style="color:#8b8b92; font-size:11px; font-weight:400">v3.10</small></div>
+  <div class="logo">Film<span>Lab</span> <small style="color:#8b8b92; font-size:11px; font-weight:400">v3.12</small></div>
   <button class="tbtn" id="btnOpen" title="ဖွင့်မယ်"><svg viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h5L11.5 8.5h8A1.5 1.5 0 0 1 21 10v7.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></svg></button>
   <button class="tbtn" id="btnRecipe"><svg viewBox="0 0 24 24"><path d="M5 3.5h11L20.5 8v11a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5z"/><path d="M7.5 3.5v5h8v-5M7.5 20.5v-6h9v6"/></svg> Recipe</button>
   <button class="tbtn" id="btnBatch" title="အစုလိုက် ထုတ်မယ်"><svg viewBox="0 0 24 24"><path d="M12 3.5v10.5M7.8 10.2 12 14.4l4.2-4.2M4 19.5h16"/></svg></button>
@@ -137,6 +140,7 @@
     <div id="cropOverlay"></div>
     <div id="healOverlay"></div>
   </div>
+  <div id="cmpBadge">ORIGINAL</div>
   <div id="emptyMsg">ဓာတ်ပုံ ဖွင့်ပြီး စမ်းကြည့်ပါ<br><span style="font-size:12px">ပုံ အားလုံး ဖုန်း/ကွန်ပျူတာ ထဲမှာပဲ ပြင်တာပါ — server ပေါ် မတက်ဘူး</span></div>
 </div>
 <div id="tabs"></div>
@@ -229,7 +233,41 @@ const FACTORY_PRESETS = [
       hsl: { orange: { h: 0, s: 6, l: 0 }, aqua: { h: 4, s: 8, l: 0 }, blue: { h: 0, s: 4, l: -4 } } } },
   { id: 'matte', name: 'Soft Matte', sub: 'မှုန် · pastel', patch: {
       contrast: -14, fade: 22, saturation: -14, vibrance: 6, temp: 3, grain: 14, vignette: 6,
-      curves: { master: [[0, 0.08], [0.25, 0.3], [0.5, 0.52], [0.75, 0.74], [1, 0.92]] } } }
+      curves: { master: [[0, 0.08], [0.25, 0.3], [0.5, 0.52], [0.75, 0.74], [1, 0.92]] } } },
+  { id: 'fx-classicchrome', name: 'Classic Chrome', sub: 'Fuji base simulation', patch: {
+      contrast: 8, blacks: -8, highlights: -4, saturation: -6, vibrance: 4, grain: 8, grainSize: 45, sharpen: 12,
+      curves: { master: [[0, 0.01], [0.25, 0.23], [0.5, 0.5], [0.75, 0.76], [1, 0.98]], b: [[0, 0.03], [0.5, 0.49], [1, 0.98]] } } },
+  { id: 'fx-classicneg', name: 'Classic Negative', sub: 'Fuji base simulation', patch: {
+      contrast: 2, fade: 10, highlights: -6, saturation: 2, vibrance: 4, temp: 1, grain: 10, grainSize: 50, sharpen: 10,
+      curves: { master: [[0, 0.05], [0.25, 0.27], [0.5, 0.51], [0.75, 0.75], [1, 0.96]], g: [[0, 0.04], [0.5, 0.52], [1, 1]], r: [[0, 0.01], [0.5, 0.5], [1, 0.98]] } } },
+  { id: 'fx-kodachrome64', name: 'Kodachrome 64', sub: 'Fuji X Weekly · Classic Chrome', patch: {
+      exposure: 0.15, contrast: 9, highlights: -6, blacks: -6, saturation: 3, vibrance: 4, temp: 8, grain: 16, grainSize: 40, sharpen: 14,
+      curves: { master: [[0, 0.01], [0.25, 0.23], [0.5, 0.5], [0.75, 0.76], [1, 0.98]], b: [[0, 0.03], [0.5, 0.49], [1, 0.98]] } } },
+  { id: 'fx-portra400', name: 'Kodak Portra 400', sub: 'Fuji X Weekly · Classic Chrome', patch: {
+      exposure: 0.2, highlights: -11, shadows: 7, saturation: 8, vibrance: 6, temp: 10, fade: 6, grain: 30, grainSize: 45, sharpen: 6,
+      curves: { master: [[0, 0.03], [0.25, 0.26], [0.5, 0.51], [0.75, 0.76], [1, 0.97]] } } },
+  { id: 'fx-portra400warm', name: 'Portra 400 Warm', sub: 'Fuji X Weekly · Classic Chrome', patch: {
+      exposure: 0.25, highlights: -19, shadows: 12, saturation: 8, vibrance: 6, temp: 9, tint: 2, fade: 8, grain: 28, grainSize: 40, sharpen: 6,
+      curves: { master: [[0, 0.03], [0.25, 0.26], [0.5, 0.51], [0.75, 0.75], [1, 0.96]], r: [[0, 0], [0.5, 0.53], [1, 1]] } } },
+  { id: 'fx-gold200', name: 'Kodak Gold 200', sub: 'Fuji X Weekly · Classic Chrome', patch: {
+      exposure: 0.25, contrast: 4, highlights: -14, shadows: -6, saturation: 12, vibrance: 8, temp: 10, grain: 32, grainSize: 50, sharpen: 6,
+      curves: { master: [[0, 0.01], [0.25, 0.24], [0.5, 0.51], [0.75, 0.77], [1, 0.98]] } } },
+  { id: 'fx-cubanneg', name: 'Classic Cuban Neg', sub: 'Fuji X Weekly · Classic Negative', patch: {
+      contrast: 8, highlights: -6, whites: 4, saturation: 12, vibrance: 4, temp: 9, grain: 14, grainSize: 68, sharpen: 10,
+      curves: { master: [[0, 0.05], [0.25, 0.27], [0.5, 0.51], [0.75, 0.75], [1, 0.96]], g: [[0, 0.04], [0.5, 0.52], [1, 1]], r: [[0, 0.01], [0.5, 0.5], [1, 0.98]] } } },
+  { id: 'fx-superia800', name: 'Superia 800', sub: 'Fuji X Weekly · Classic Negative', patch: {
+      exposure: 0.1, contrast: 2, highlights: -18, shadows: -3, blacks: -4, saturation: -4, vibrance: 2, temp: 2, grain: 34, grainSize: 70, sharpen: 8,
+      curves: { master: [[0, 0.05], [0.25, 0.27], [0.5, 0.51], [0.75, 0.74], [1, 0.95]], g: [[0, 0.04], [0.5, 0.52], [1, 1]] } } },
+  { id: 'fx-superiaxtra400', name: 'Superia Xtra 400', sub: 'Fuji X Weekly · Classic Negative', patch: {
+      contrast: 4, highlights: -10, shadows: 6, saturation: 16, vibrance: 6, temp: 9, grain: 30, grainSize: 42, sharpen: 8,
+      curves: { master: [[0, 0.05], [0.25, 0.27], [0.5, 0.51], [0.75, 0.75], [1, 0.96]], g: [[0, 0.03], [0.5, 0.52], [1, 1]] },
+      hsl: { blue: { h: 0, s: 6, l: 0 } } } },
+  { id: 'fx-c200', name: 'Fujicolor C200', sub: 'Fuji X Weekly · Classic Negative', patch: {
+      contrast: 4, highlights: -12, shadows: 12, saturation: 16, vibrance: 6, temp: 3, grain: 14, grainSize: 40, sharpen: 8,
+      curves: { master: [[0, 0.05], [0.25, 0.28], [0.5, 0.52], [0.75, 0.75], [1, 0.96]], g: [[0, 0.03], [0.5, 0.52], [1, 1]] } } },
+  { id: 'fx-ilforddelta', name: 'Ilford Delta Push', sub: 'Fuji X Weekly · Monochrome', patch: {
+      saturation: -100, contrast: 16, blacks: -10, shadows: -6, highlights: -10, grain: 36, grainSize: 55, sharpen: 4,
+      curves: { master: [[0, 0], [0.25, 0.2], [0.5, 0.5], [0.75, 0.8], [1, 0.99]] } } }
 ];
 
 function applyPatch(settings, patch) {
@@ -1240,10 +1278,11 @@ function recipeStepper(panel) {
   panel.appendChild(box);
   note(panel, 'အမည် ဘားကို နှိပ်ရင် စာရင်း ပွင့်လာမယ် — အပေါ်/အောက် ရွှေ့ ရွေးပါ။ ◀ ▶ နဲ့လည်း တစ်ခုချင်း လှည့်လို့ ရတယ်။ ရွေးထားတဲ့ နာမည် ဘားမှာ ကျန်နေမယ်။');
 }
+let presetStripScroll = 0;
 function panelPreset(panel) {
   recipeStepper(panel);
   const grid = document.createElement('div');
-  grid.className = 'presetGrid';
+  grid.className = 'presetStrip';
   for (const pr of FACTORY_PRESETS) {
     const d = document.createElement('div');
     d.className = 'preset' + (S._presetId === pr.id ? ' active' : '');
@@ -1251,6 +1290,7 @@ function panelPreset(panel) {
     d.append(document.createTextNode(pr.name));
     const sm = document.createElement('small'); sm.textContent = pr.sub; d.appendChild(sm);
     d.addEventListener('click', () => {
+      presetStripScroll = grid.scrollLeft;
       const keepLUT = { lutName: S.lutName, lutIntensity: S.lutIntensity };
       const fresh = applyPatch(defaultSettings(), pr.patch);
       fresh.lutName = keepLUT.lutName; fresh.lutIntensity = keepLUT.lutIntensity;
@@ -1267,6 +1307,9 @@ function panelPreset(panel) {
   rb.appendChild(reset);
   panel.appendChild(rb);
   panel.appendChild(grid);
+  grid.addEventListener('scroll', () => { presetStripScroll = grid.scrollLeft; }, { passive: true });
+  requestAnimationFrame(() => { grid.scrollLeft = presetStripScroll; });
+  note(panel, 'အသစ်: Fuji X Weekly (fujixweekly.com) ရဲ့ နာမည်ကြီး recipe ၉ ခုကို FilmLab အတွက် ခန့်မှန်း ပြောင်းထားတာ — Fuji camera ရဲ့ simulation အစစ် မဟုတ်ပါ။ Preset တန်းကို ဘယ်ညာ ပွတ်ဆွဲ သွားနိုင်တယ်။');
   const lutBox = document.createElement('div');
   lutBox.innerHTML = '<div style="font-size:13px; font-weight:700; padding-top:8px">LUT <span style="color:#8b8b92; font-weight:400" id="lutNameTxt"></span></div>';
   panel.appendChild(lutBox);
@@ -1678,7 +1721,7 @@ function panelHeal(panel) {
   clr.addEventListener('click', () => { S.heals = []; markEdited(); refreshHealMarkers(); scheduleRender(); });
   rb.appendChild(clr);
   panel.appendChild(rb);
-  note(panel, 'Snapseed ပုံစံ: ထိရုံ နဲ့ မရရင် ထိပြီး ဆွဲ (brush လို ပွတ်) လို့ ရတယ်။ ဖြည့်တာက အစက် ပတ်ပတ်လည် pixel တွေကို ကြည့်ပြီး အလယ် ပျမ်းမျှ ဖြည့်တဲ့ နည်း — dust၊ အမျှင်၊ ဝက်ခြံ လို သေးသေးတွေ အတွက်။ ချဲ့ကြည့်ဖို့ လက် ၂ ချောင်း ဆွဲပါ။ အကြီးစား/အနေ အထား ရှုပ်တဲ့ နေရာတွေတော့ မရသေးပါ။');
+  note(panel, 'ထိလိုက် တဲ့ နေရာ ကို ပတ်ဝန်းကျင် အရောင် ယူပြီး အလိုအလျောက် ဖြည့်ပေးတယ်။ အစက် အမှတ် က ခဏ ပဲ ပေါ်ပြီး သူ့ဟာသူ ပျောက် သွား တယ် — ဖြည့်ထား တာ ကျန် နေတယ်။ ဆက်ဖြည့်ချင် နောက် တစ်နေရာ ထပ် ထိရုံပဲ။ ဖျက်ချင် ရင် ✖ ဖျက်မယ် mode မှာ အစက် တွေ ပြန် ပေါ် လာ မယ်။ ထိပြီး ဆွဲ (brush လို ပွတ်) လို့လည်း ရတယ် — dust၊ အမျှင်၊ ဝက်ခြံ လို သေးသေးတွေ အတွက်။');
   refreshHealMarkers();
 }
 function refreshHealMarkers() {
@@ -2068,9 +2111,13 @@ viewCanvas.addEventListener('pointerdown', (e) => {
   holdTimer = setTimeout(() => {
     comparing = true;
     const ph = activePhoto(); if (!ph) return;
+    $('cmpBadge').style.display = 'block';
     const saved = lutSizeN; lutSizeN = 0;
     const w = viewCanvas.width, h = viewCanvas.height;
-    renderPipeline(defaultSettings(), w, h, true);
+    const cmp = deepClone(S); const dflt = defaultSettings();
+    const keep = { crop: cmp.crop, rotate: cmp.rotate, distortion: cmp.distortion, perspV: cmp.perspV, perspH: cmp.perspH, healSize: cmp.healSize, focusX: cmp.focusX, focusY: cmp.focusY };
+    Object.assign(cmp, dflt); Object.assign(cmp, keep); cmp.heals = [];
+    renderPipeline(cmp, w, h, true);
     lutSizeN = saved;
   }, 380);
   viewCanvas._downAt = Date.now();
@@ -2078,7 +2125,7 @@ viewCanvas.addEventListener('pointerdown', (e) => {
 });
 viewCanvas.addEventListener('pointerup', (e) => {
   clearTimeout(holdTimer);
-  if (comparing) { comparing = false; scheduleRender(); return; }
+  if (comparing) { comparing = false; $('cmpBadge').style.display = 'none'; scheduleRender(); return; }
   const dp = viewCanvas._downPos;
   const tapDist = dp ? Math.abs(e.clientX - dp.x) + Math.abs(e.clientY - dp.y) : 99;
   const quickTap = Date.now() - (viewCanvas._downAt || 0) < 300 && tapDist < 10;
@@ -2095,7 +2142,8 @@ viewCanvas.addEventListener('pointerup', (e) => {
     toast('Focus အမှတ် ရွှေ့ပြီး');
   }
 });
-viewCanvas.addEventListener('pointerleave', () => { clearTimeout(holdTimer); if (comparing) { comparing = false; scheduleRender(); } });
+viewCanvas.addEventListener('pointerleave', () => { clearTimeout(holdTimer); if (comparing) { comparing = false; $('cmpBadge').style.display = 'none'; scheduleRender(); } });
+viewCanvas.addEventListener('pointercancel', () => { clearTimeout(holdTimer); if (comparing) { comparing = false; $('cmpBadge').style.display = 'none'; scheduleRender(); } });
 
 /* ================= LUT files ================= */
 $('fileLUT').addEventListener('change', async (e) => {
