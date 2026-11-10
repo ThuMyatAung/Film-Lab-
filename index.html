@@ -126,7 +126,7 @@
 <body>
 <div id="app">
 <div id="topbar">
-  <div class="logo">Film<span>Lab</span> <small style="color:#8b8b92; font-size:11px; font-weight:400">v3.12</small></div>
+  <div class="logo">Film<span>Lab</span> <small style="color:#8b8b92; font-size:11px; font-weight:400">v3.13</small></div>
   <button class="tbtn" id="btnOpen" title="ဖွင့်မယ်"><svg viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h5L11.5 8.5h8A1.5 1.5 0 0 1 21 10v7.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></svg></button>
   <button class="tbtn" id="btnRecipe"><svg viewBox="0 0 24 24"><path d="M5 3.5h11L20.5 8v11a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5z"/><path d="M7.5 3.5v5h8v-5M7.5 20.5v-6h9v6"/></svg> Recipe</button>
   <button class="tbtn" id="btnBatch" title="အစုလိုက် ထုတ်မယ်"><svg viewBox="0 0 24 24"><path d="M12 3.5v10.5M7.8 10.2 12 14.4l4.2-4.2M4 19.5h16"/></svg></button>
@@ -179,10 +179,32 @@
 function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
 function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
 
+// Kelvin <-> Temperature slider (-100..100) mapping. 5500K = neutral (daylight).
+// Warm side: 2000K -> +100. Cool side: 12000K -> -100. Piecewise linear.
+function kelvinToTemp(k) {
+  const kk = clamp(k, 2000, 12000);
+  return kk <= 5500 ? (5500 - kk) / 35 : (5500 - kk) / 65;
+}
+function tempToKelvin(t) {
+  const tt = clamp(t, -100, 100);
+  return tt >= 0 ? Math.round(5500 - tt * 35) : Math.round(5500 - tt * 65);
+}
+
+// Set the output (y) of the control point at input x on a curve; creates the point if missing.
+function setCurvePointY(points, x, y) {
+  const pts = points.slice().sort((a, b) => a[0] - b[0]);
+  const i = pts.findIndex(p => Math.abs(p[0] - x) < 0.001);
+  if (i >= 0) pts[i][1] = clamp(y, 0, 1);
+  else { pts.push([x, clamp(y, 0, 1)]); pts.sort((a, b) => a[0] - b[0]); }
+  return pts;
+}
+
 function defaultSettings() {
   return {
     exposure: 0, brightness: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0, fade: 0,
     temp: 0, tint: 0, vibrance: 0, saturation: 0,
+    clarity: 0, texture: 0,
+    gradeS: { h: 0, s: 0 }, gradeM: { h: 0, s: 0 }, gradeH: { h: 0, s: 0 }, gradeBalance: 0,
     hsl: {
       red: { h: 0, s: 0, l: 0 }, orange: { h: 0, s: 0, l: 0 }, yellow: { h: 0, s: 0, l: 0 }, green: { h: 0, s: 0, l: 0 },
       aqua: { h: 0, s: 0, l: 0 }, blue: { h: 0, s: 0, l: 0 }, purple: { h: 0, s: 0, l: 0 }, magenta: { h: 0, s: 0, l: 0 }
@@ -441,6 +463,15 @@ function parseXMPSettings(text) {
   const sharp = num('Sharpness'); if (sharp !== null) patch.sharpen = clamp(Math.round(sharp / 2), 0, 100);
   const grain = num('GrainAmount'); if (grain !== null) patch.grain = clamp(Math.round(grain), 0, 100);
   const vig = num('PostCropVignetteAmount'); if (vig !== null) patch.vignette = clamp(Math.round(-vig), 0, 100);
+  const kel = num('Temperature'); if (kel !== null) patch.temp = clamp(Math.round(kelvinToTemp(kel)), -100, 100);
+  const tintV = num('Tint'); if (tintV !== null) patch.tint = clamp(Math.round(tintV), -100, 100);
+  const clar = num('Clarity2012'); if (clar !== null) patch.clarity = clamp(Math.round(clar), -100, 100);
+  const tex = num('Texture'); if (tex !== null) patch.texture = clamp(Math.round(tex), -100, 100);
+  const shH = num('SplitToningShadowHue'), shS = num('SplitToningShadowSaturation');
+  if (shH !== null || shS !== null) patch.gradeS = { h: clamp(Math.round(shH || 0), 0, 360), s: clamp(Math.round(shS || 0), 0, 100) };
+  const hiH = num('SplitToningHighlightHue'), hiS = num('SplitToningHighlightSaturation');
+  if (hiH !== null || hiS !== null) patch.gradeH = { h: clamp(Math.round(hiH || 0), 0, 360), s: clamp(Math.round(hiS || 0), 0, 100) };
+  const bal = num('SplitToningBalance'); if (bal !== null) patch.gradeBalance = clamp(Math.round(bal), -100, 100);
   const curves = {};
   const cm = curvePoints('ToneCurvePV2012'); if (cm) curves.master = cm;
   const cr = curvePoints('ToneCurvePV2012Red'); if (cr) curves.r = cr;
@@ -487,6 +518,7 @@ uniform float uTemp, uTint, uVibrance, uSaturation;
 uniform vec3 uHsl[8];
 uniform sampler2D uCurves;
 uniform sampler2D uLUT; uniform float uLutSize, uLutAmt, uHasLUT;
+uniform vec3 uGradeS; uniform vec3 uGradeM; uniform vec3 uGradeH; uniform float uGradeBal;
 float lum(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 vec2 geoUv(vec2 uv0){
   vec2 cuv = vec2(uCrop.x + uv0.x * uCrop.z, (1.0 - uCrop.y - uCrop.w) + uv0.y * uCrop.w);
@@ -535,6 +567,26 @@ vec3 applyHSL(vec3 c){
   else if (h < 300.0) rgb = vec3(x, 0.0, cc); else rgb = vec3(cc, 0.0, x);
   return rgb + m;
 }
+vec3 hueRGB(float hDeg){
+  float h = mod(hDeg, 360.0);
+  float x = 1.0 - abs(mod(h / 60.0, 2.0) - 1.0);
+  vec3 rgb;
+  if (h < 60.0) rgb = vec3(1.0, x, 0.0); else if (h < 120.0) rgb = vec3(x, 1.0, 0.0);
+  else if (h < 180.0) rgb = vec3(0.0, 1.0, x); else if (h < 240.0) rgb = vec3(0.0, x, 1.0);
+  else if (h < 300.0) rgb = vec3(x, 0.0, 1.0); else rgb = vec3(1.0, 0.0, x);
+  return rgb;
+}
+vec3 applyGrade(vec3 c){
+  float L = lum(c);
+  float bal = clamp(uGradeBal, -1.0, 1.0);
+  float shW = pow(1.0 - L, 2.0) * (1.0 - bal * 0.5);
+  float hiW = L * L * (1.0 + bal * 0.5);
+  float midW = clamp(1.0 - shW - hiW, 0.0, 1.0);
+  c = mix(c, hueRGB(uGradeS.x), shW * uGradeS.y * 0.6);
+  c = mix(c, hueRGB(uGradeM.x), midW * uGradeM.y * 0.6);
+  c = mix(c, hueRGB(uGradeH.x), hiW * uGradeH.y * 0.6);
+  return c;
+}
 vec3 applyLUT(vec3 c){
   float N = uLutSize;
   vec3 sc = clamp(c, 0.0, 1.0) * (N - 1.0);
@@ -566,6 +618,7 @@ void main(){
   float satF = max(0.0, 1.0 + uSaturation + uVibrance * (1.0 - satLevel));
   c = mix(gray, c, satF);
   c = applyHSL(clamp(c, 0.0, 1.0));
+  c = applyGrade(clamp(c, 0.0, 1.0));
   c.r = texture2D(uCurves, vec2(clamp(c.r, 0.0, 1.0), 0.5)).r;
   c.g = texture2D(uCurves, vec2(clamp(c.g, 0.0, 1.0), 0.5)).g;
   c.b = texture2D(uCurves, vec2(clamp(c.b, 0.0, 1.0), 0.5)).b;
@@ -629,6 +682,7 @@ precision highp float;
 varying vec2 vUv;
 uniform sampler2D uTex; uniform vec2 uTexel; uniform vec2 uRes;
 uniform float uSharpen, uGrain, uGrainSize, uVignette, uLeak, uDust, uSeed, uAspect;
+uniform float uClarity, uTexture;
 uniform vec4 uHealPos[24];
 uniform float uHealCount;
 uniform float uSpot;
@@ -666,6 +720,18 @@ void main(){
     vec3 nb = texture2D(uTex, vUv + vec2(uTexel.x, 0.0)).rgb + texture2D(uTex, vUv - vec2(uTexel.x, 0.0)).rgb
             + texture2D(uTex, vUv + vec2(0.0, uTexel.y)).rgb + texture2D(uTex, vUv - vec2(0.0, uTexel.y)).rgb;
     c += (c - nb * 0.25) * uSharpen * 1.4;
+  }
+  if (uClarity > 0.001 || uClarity < -0.001 || uTexture > 0.001 || uTexture < -0.001) {
+    // Local contrast on luminance: wide radius = Clarity, fine radius = Texture.
+    // Negative values soften (reduce local contrast). Radii scale with resolution.
+    float Lc = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    vec2 rC = uTexel * clamp(uRes.x * 0.004, 2.0, 24.0);
+    vec2 rT = uTexel * clamp(uRes.x * 0.0015, 1.0, 8.0);
+    float Lb = dot(texture2D(uTex, vUv + vec2(rC.x, rC.y)).rgb + texture2D(uTex, vUv - vec2(rC.x, rC.y)).rgb
+                 + texture2D(uTex, vUv + vec2(rC.x, -rC.y)).rgb + texture2D(uTex, vUv - vec2(rC.x, -rC.y)).rgb, vec3(0.2126, 0.7152, 0.0722)) * 0.25;
+    float Lt = dot(texture2D(uTex, vUv + vec2(rT.x, rT.y)).rgb + texture2D(uTex, vUv - vec2(rT.x, rT.y)).rgb
+                 + texture2D(uTex, vUv + vec2(rT.x, -rT.y)).rgb + texture2D(uTex, vUv - vec2(rT.x, -rT.y)).rgb, vec3(0.2126, 0.7152, 0.0722)) * 0.25;
+    c += (Lc - Lb) * uClarity * 0.9 + (Lc - Lt) * uTexture * 0.9;
   }
   float L = dot(c, vec3(0.2126, 0.7152, 0.0722));
   if (uGrain > 0.001) {
@@ -871,6 +937,11 @@ function setGradeUniforms(P, st, w, h) {
   gl.uniform1f(U(P, 'uTint'), st.tint / 100);
   gl.uniform1f(U(P, 'uVibrance'), st.vibrance / 100);
   gl.uniform1f(U(P, 'uSaturation'), st.saturation / 100);
+  const gS = st.gradeS || { h: 0, s: 0 }, gM = st.gradeM || { h: 0, s: 0 }, gH = st.gradeH || { h: 0, s: 0 };
+  gl.uniform3f(U(P, 'uGradeS'), gS.h, (gS.s || 0) / 100, 0);
+  gl.uniform3f(U(P, 'uGradeM'), gM.h, (gM.s || 0) / 100, 0);
+  gl.uniform3f(U(P, 'uGradeH'), gH.h, (gH.s || 0) / 100, 0);
+  gl.uniform1f(U(P, 'uGradeBal'), (st.gradeBalance || 0) / 100);
   const order = ['red', 'orange', 'yellow', 'green', 'aqua', 'blue', 'purple', 'magenta'];
   order.forEach((k, i) => {
     const c = st.hsl[k];
@@ -957,6 +1028,8 @@ function renderPipeline(st, w, h, toCanvas) {
   gl.uniform2f(U(progs.finish, 'uTexel'), 1 / w, 1 / h);
   gl.uniform2f(U(progs.finish, 'uRes'), w, h);
   gl.uniform1f(U(progs.finish, 'uSharpen'), st.sharpen / 100);
+  gl.uniform1f(U(progs.finish, 'uClarity'), (st.clarity || 0) / 100);
+  gl.uniform1f(U(progs.finish, 'uTexture'), (st.texture || 0) / 100);
   gl.uniform1f(U(progs.finish, 'uGrain'), st.grain / 100 * 0.55);
   gl.uniform1f(U(progs.finish, 'uGrainSize'), st.grainSize);
   gl.uniform1f(U(progs.finish, 'uVignette'), st.vignette / 100);
@@ -1074,8 +1147,8 @@ const FEV = (v) => (v > 0 ? '+' : '') + v.toFixed(2);
 
 /* ---------- tabs ---------- */
 const TABS = [
-  ['preset', 'Preset'], ['crop', 'Crop'], ['light', 'Light'], ['color', 'Color'], ['curves', 'Curves'],
-  ['hsl', 'HSL'], ['effects', 'Effects'], ['geometry', 'Geometry'], ['heal', 'Heal'], ['portrait', 'Portrait']
+  ['preset', 'Preset'], ['crop', 'Crop'], ['light', 'Light'], ['color', 'Color'], ['wb', 'WB'], ['curves', 'Curves'],
+  ['hsl', 'HSL'], ['grading', 'Grading'], ['effects', 'Effects'], ['geometry', 'Geometry'], ['heal', 'Heal'], ['portrait', 'Portrait']
 ];
 function buildTabs() {
   const bar = $('tabs');
@@ -1116,14 +1189,18 @@ function buildPanel() {
     sliderRow(panel, 'Vibrance', () => S.vibrance, v => S.vibrance = v, -100, 100, 1, 0, F0);
     sliderRow(panel, 'Saturation', () => S.saturation, v => S.saturation = v, -100, 100, 1, 0, F0);
   }
+  else if (activeTab === 'wb') panelWB(panel);
+  else if (activeTab === 'grading') panelGrading(panel);
   else if (activeTab === 'effects') {
     sliderRow(panel, 'Grain', () => S.grain, v => S.grain = v, 0, 100, 1, 0, F0);
     sliderRow(panel, 'Grain Size', () => S.grainSize, v => S.grainSize = v, 0, 100, 1, 50, F0);
     sliderRow(panel, 'Vignette', () => S.vignette, v => S.vignette = v, 0, 100, 1, 0, F0);
     sliderRow(panel, 'Sharpen', () => S.sharpen, v => S.sharpen = v, 0, 100, 1, 0, F0);
+    sliderRow(panel, 'Texture', () => S.texture, v => S.texture = v, -100, 100, 1, 0, F0);
+    sliderRow(panel, 'Clarity', () => S.clarity, v => S.clarity = v, -100, 100, 1, 0, F0);
     sliderRow(panel, 'Light Leak', () => S.leak, v => S.leak = v, 0, 100, 1, 0, F0);
     sliderRow(panel, 'Dust', () => S.dust, v => S.dust = v, 0, 100, 1, 0, F0);
-    note(panel, 'Grain/Leak/Dust က film look ရဲ့ အနှစ် သာရတွေပါ — ပါးပါးပဲ ထည့်တာ ပိုလှတယ်။');
+    note(panel, 'Grain/Leak/Dust က film look ရဲ့ အနှစ် သာရတွေပါ — ပါးပါးပဲ ထည့်တာ ပိုလှတယ်။ Texture က အသေးစိတ် (အရေပြား texture မပျက်စေနဲ့), Clarity က အလယ်အလတ် contrast — များရင် ကြမ်းသွားတတ်တယ်။');
   }
   else if (activeTab === 'curves') panelCurves(panel);
   else if (activeTab === 'hsl') panelHSL(panel);
@@ -1152,6 +1229,8 @@ const DECK_ICONS = {
   'Grain Size': ['<g fill="currentColor" stroke="none"><circle cx="5.5" cy="12" r="1.2"/><circle cx="11.5" cy="12" r="2"/><circle cx="18.5" cy="12" r="2.9"/></g>', 'G.Size'],
   'Vignette': ['<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="12" cy="12" r="4.5"/>', 'Vig'],
   'Sharpen': ['<path d="M12 3l1.9 7.1L21 12l-7.1 1.9L12 21l-1.9-7.1L3 12l7.1-1.9z"/>', 'Sharp'],
+  'Texture': ['<path d="M4 7c2-1.5 4 1.5 6 0s4 1.5 6 0M4 12c2-1.5 4 1.5 6 0s4 1.5 6 0M4 17c2-1.5 4 1.5 6 0s4 1.5 6 0"/>', 'Text'],
+  'Clarity': ['<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none"/>', 'Clarity'],
   'Light Leak': ['<path d="M5 17.5a7 7 0 0 1 14 0"/><path d="M2.5 21h19M12 5.5V3M5.8 8L4.2 6.4M18.2 8l1.6-1.6"/>', 'Leak'],
   'Dust': ['<g fill="currentColor" stroke="none"><circle cx="6" cy="7" r="1.1"/><circle cx="17" cy="5.5" r="1.1"/><circle cx="12" cy="11" r="1.1"/><circle cx="5" cy="16" r="1.1"/><circle cx="18.5" cy="15" r="1.1"/><circle cx="10" cy="19.5" r="1.1"/><circle cx="16" cy="20.5" r="1.1"/></g>', 'Dust'],
   'Distortion': ['<path d="M3.5 6.5c2.8 2.4 4.7-2.4 7.5 0s4.7-2.4 7.5 0M3.5 12c2.8 2.4 4.7-2.4 7.5 0s4.7-2.4 7.5 0M3.5 17.5c2.8 2.4 4.7-2.4 7.5 0s4.7-2.4 7.5 0"/>', 'Dist'],
@@ -1891,8 +1970,39 @@ $('focusExit').addEventListener('click', () => toggleFocusView(false));
 </script>
 <script>
 'use strict';
+/* ================= White Balance (Kelvin) + Color Grading panels ================= */
+function panelWB(panel) {
+  sliderRow(panel, 'Kelvin', () => tempToKelvin(S.temp), v => { S.temp = Math.round(kelvinToTemp(v)); }, 2000, 12000, 50, 5500, (v) => v + 'K');
+  sliderRow(panel, 'Tint', () => S.tint, v => S.tint = v, -100, 100, 1, 0, F0);
+  note(panel, 'Kelvin က Temperature slider ရဲ့ တန်ဖိုးပဲ — 5500K က နေရောင်ခြည် (daylight), 3200K က မီးလုံး (tungsten) နွေးနွေး, 7500K က အရိပ်ထဲ အေးအေး။ Color tab မှာလည်း Temperature/Tint က အတူတူပဲ ချိန်လို့ ရတယ်။');
+}
+function panelGrading(panel) {
+  const head = (t) => {
+    const d = document.createElement('div');
+    d.style.cssText = 'font-size:13px; font-weight:700; padding-top:12px';
+    d.textContent = t;
+    panel.appendChild(d);
+  };
+  head('Shadows — အမှောင်');
+  sliderRow(panel, 'Hue', () => S.gradeS.h, v => S.gradeS.h = v, 0, 360, 1, 0, (v) => Math.round(v) + '°');
+  sliderRow(panel, 'Saturation', () => S.gradeS.s, v => S.gradeS.s = v, 0, 100, 1, 0, F0);
+  head('Midtones — အလယ်');
+  sliderRow(panel, 'Hue', () => S.gradeM.h, v => S.gradeM.h = v, 0, 360, 1, 0, (v) => Math.round(v) + '°');
+  sliderRow(panel, 'Saturation', () => S.gradeM.s, v => S.gradeM.s = v, 0, 100, 1, 0, F0);
+  head('Highlights — အလင်း');
+  sliderRow(panel, 'Hue', () => S.gradeH.h, v => S.gradeH.h = v, 0, 360, 1, 0, (v) => Math.round(v) + '°');
+  sliderRow(panel, 'Saturation', () => S.gradeH.s, v => S.gradeH.s = v, 0, 100, 1, 0, F0);
+  sliderRow(panel, 'Balance', () => S.gradeBalance, v => S.gradeBalance = v, -100, 100, 1, 0, F0);
+  note(panel, 'Split toning (S-H-M) — အမှောင်/အလယ်/အလင်း အပိုင်းတိုင်းကို အရောင် တစ်မျိုး စီ တင်တာ။ ဥပမာ — Shadows ကို teal (190°), Highlights ကို orange (35°) ဆို cinema look ရတယ်။ Balance က အမှောင်-အလင်း နယ်နိမိတ် ရွှေ့တာ။');
+}
+
 /* ================= Curves / HSL / Geometry / Portrait panels ================= */
 let curveChannel = 'master';
+let curveNumInputs = null;
+function syncCurveNums() {
+  if (!curveNumInputs) return;
+  for (const { x, inp } of curveNumInputs) inp.value = Math.round(curveEval(S.curves[curveChannel], x) * 100);
+}
 function panelCurves(panel) {
   const chips = document.createElement('div'); chips.className = 'chips';
   [['master', 'Master'], ['r', 'Red'], ['g', 'Green'], ['b', 'Blue']].forEach(([id, lb]) => {
@@ -1912,11 +2022,36 @@ function panelCurves(panel) {
   const rst = document.createElement('button'); rst.className = 'chip'; rst.textContent = 'Curve ရှင်း';
   rst.addEventListener('click', () => {
     S.curves[curveChannel] = curveChannel === 'master' ? [[0, 0], [0.25, 0.25], [0.5, 0.5], [0.75, 0.75], [1, 1]] : [[0, 0], [1, 1]];
-    drawCurveEditor(cv); updateCurvesTexture(); markEdited(); scheduleRender();
+    drawCurveEditor(cv); syncCurveNums(); updateCurvesTexture(); markEdited(); scheduleRender();
   });
   rb.appendChild(rst);
   panel.appendChild(rb);
-  note(panel, 'အမှတ်ကို ဆွဲ ရွှေ့ပါ — ကွက်လပ်မှာ ထိရင် အမှတ် အသစ် ထပ်ထည့်တယ်။');
+  // Numeric fields for Black (x=0) / Mid (x=0.5) / White (x=1) point outputs (0-100)
+  const numRow = document.createElement('div');
+  numRow.style.cssText = 'display:flex; gap:8px; padding:10px 0 2px';
+  curveNumInputs = [];
+  [['Black', 0], ['Mid', 0.5], ['White', 1]].forEach(([lb, x]) => {
+    const wrap = document.createElement('label');
+    wrap.style.cssText = 'flex:1; font-size:11.5px; color:#c9c9cf; text-align:center';
+    wrap.textContent = lb;
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.min = 0; inp.max = 100; inp.step = 1;
+    inp.value = Math.round(curveEval(S.curves[curveChannel], x) * 100);
+    inp.style.cssText = 'width:100%; background:#1d1d20; border:1px solid #3a3a40; border-radius:8px; color:#e8e8ea; padding:7px 4px; font-size:16px; text-align:center; margin-top:4px';
+    inp.addEventListener('change', () => {
+      let v = parseFloat(inp.value);
+      if (isNaN(v)) { syncCurveNums(); return; }
+      v = clamp(v, 0, 100);
+      S.curves[curveChannel] = setCurvePointY(S.curves[curveChannel], x, v / 100);
+      inp.value = v;
+      drawCurveEditor(cv); updateCurvesTexture(); markEdited(); scheduleRender();
+    });
+    wrap.appendChild(inp);
+    numRow.appendChild(wrap);
+    curveNumInputs.push({ x, inp });
+  });
+  panel.appendChild(numRow);
+  note(panel, 'အမှတ်ကို ဆွဲ ရွှေ့ပါ — ကွက်လပ်မှာ ထိရင် အမှတ် အသစ် ထပ်ထည့်တယ်။ ဂဏန်းရိုက်ထည့်လို့လည်း ရတယ် (Black 0, Mid 0.5, White 1 အမှတ်တွေရဲ့ output တန်ဖိုး)။');
   drawCurveEditor(cv);
   initCurveDrag(cv);
 }
@@ -1977,10 +2112,11 @@ function initCurveDrag(cv) {
     else pt[0] = clamp(p.x, pts[dragIdx - 1][0] + 0.03, pts[dragIdx + 1][0] - 0.03);
     pt[1] = p.y;
     drawCurveEditor(cv);
+    syncCurveNums();
     updateCurvesTexture();
     scheduleRender();
   });
-  cv.addEventListener('pointerup', () => { dragIdx = -1; markEdited(); });
+  cv.addEventListener('pointerup', () => { dragIdx = -1; syncCurveNums(); markEdited(); });
 }
 let hslChannel = 'red';
 const HSL_META = [
